@@ -16,6 +16,12 @@ android {
         versionCode = 1
         versionName = "1.0-Ninja"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        // THE FIX: Adding KSP arguments for Room
+        ksp {
+            arg("room.schemaLocation", "$projectDir/schemas")
+            arg("room.generateKotlin", "true")
+        }
     }
 
     buildTypes {
@@ -52,7 +58,7 @@ kotlin {
 }
 
 dependencies {
-    // --- CORE & COMPOSE UI ---
+    // --- CORE & UI ---
     implementation("androidx.core:core-ktx:1.12.0")
     implementation("androidx.activity:activity-compose:1.9.3")
     implementation(platform("androidx.compose:compose-bom:2024.10.01"))
@@ -71,8 +77,13 @@ dependencies {
     implementation("androidx.media3:media3-exoplayer:$media3Version")
     implementation("androidx.media3:media3-ui:$media3Version")
     implementation("androidx.media3:media3-common:$media3Version")
-    // THE MISSING LINK:
     implementation("androidx.media3:media3-effect:$media3Version")
+
+    // --- ROOM (The Memory - Version 2.7.0-alpha11 fixes the JVM V signature error) ---
+    val roomVersion = "2.7.0-alpha11"
+    implementation("androidx.room:room-runtime:$roomVersion")
+    implementation("androidx.room:room-ktx:$roomVersion")
+    ksp("androidx.room:room-compiler:$roomVersion")
 
     // --- G3 FLASH & SERIALIZATION ---
     implementation("com.google.ai.client.generativeai:generativeai:0.9.0")
