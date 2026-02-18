@@ -4,6 +4,7 @@ import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -50,7 +51,7 @@ fun DashboardScreen(
     val personas by dao.getAllPersonas().collectAsState(initial = emptyList())
     val engines by dao.getAllEngines().collectAsState(initial = emptyList())
 
-    // --- SHARED UI STATE ---
+    // --- UI STATE ---
     var videoUriString by rememberSaveable { mutableStateOf<String?>(null) }
     var contextInfo by rememberSaveable { mutableStateOf("") }
     var selectedPersona by remember { mutableStateOf<PersonaEntity?>(null) }
@@ -75,7 +76,31 @@ fun DashboardScreen(
     ) {
         item { Spacer(Modifier.height(8.dp)) }
 
-        // 1. MEDIA PREVIEW & RESET
+        // 1. THE MATRIX (Now at the top)
+        item {
+            Surface(
+                color = Color.Black,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(100.dp)
+                    .border(1.dp, Color.Green.copy(alpha = 0.5f), MaterialTheme.shapes.small)
+            ) {
+                val scrollState = rememberScrollState()
+                // Auto-scroll to bottom of logs
+                LaunchedEffect(logs) {
+                    scrollState.animateScrollTo(scrollState.maxValue)
+                }
+                Text(
+                    text = logs.substringBefore("###ARCHITECT_DRAFT###"),
+                    color = Color.Green,
+                    fontFamily = FontFamily.Monospace,
+                    fontSize = 10.sp,
+                    modifier = Modifier.padding(8.dp).verticalScroll(scrollState)
+                )
+            }
+        }
+
+        // 2. MEDIA PREVIEW & RESET
         item {
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 Text("Architect Workspace", style = MaterialTheme.typography.labelLarge)
@@ -97,10 +122,9 @@ fun DashboardScreen(
             }
         }
 
-        // 2. MODULAR SELECTION (SOUL & SCRIPT)
+        // 3. BLUEPRINT SELECTION
         item {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                // Persona Selection
                 OutlinedCard(onClick = { showPersonaSheet = true }, modifier = Modifier.fillMaxWidth()) {
                     Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Default.Person, null, modifier = Modifier.size(16.dp))
@@ -109,7 +133,6 @@ fun DashboardScreen(
                     }
                 }
 
-                // Platform Engine Selection (Chips wrap automatically)
                 Text("Platform Engine Blueprint:", style = MaterialTheme.typography.labelSmall)
                 FlowRow(
                     modifier = Modifier.fillMaxWidth(),
@@ -126,11 +149,11 @@ fun DashboardScreen(
             }
         }
 
-        // 3. CAPTION STATION
+        // 4. STRATEGY OUTPUT
         item {
             Column(modifier = Modifier.fillMaxWidth().border(1.dp, MaterialTheme.colorScheme.outline, MaterialTheme.shapes.medium).padding(12.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("Strategy Output", style = MaterialTheme.typography.labelLarge)
+                    Text("Draft Station", style = MaterialTheme.typography.labelLarge)
                     Spacer(Modifier.weight(1f))
                     listOf("SHK", "REL", "CHS").forEachIndexed { index, label ->
                         InputChip(selected = activeCaptionIndex == index, onClick = { activeCaptionIndex = index }, label = { Text(label, fontSize = 9.sp) }, modifier = Modifier.padding(start = 4.dp))
@@ -153,7 +176,7 @@ fun DashboardScreen(
             }
         }
 
-        // 4. METADATA & SEO
+        // 5. METADATA & EXECUTE
         item {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -164,50 +187,37 @@ fun DashboardScreen(
                         detectTapGestures(onDoubleTap = { clipboardManager.setText(AnnotatedString(musicTip)); Toast.makeText(context, "Music Copied!", Toast.LENGTH_SHORT).show() })
                     })
                 }
+
                 if (seoTags.isNotBlank()) {
-                    OutlinedTextField(value = seoTags, onValueChange = {}, label = { Text("SEO / Backend Tags") }, modifier = Modifier.fillMaxWidth().pointerInput(Unit) {
+                    OutlinedTextField(value = seoTags, onValueChange = {}, label = { Text("SEO Tags") }, modifier = Modifier.fillMaxWidth().pointerInput(Unit) {
                         detectTapGestures(onDoubleTap = { clipboardManager.setText(AnnotatedString(seoTags)); Toast.makeText(context, "Tags Copied!", Toast.LENGTH_SHORT).show() })
                     })
+                }
+
+                Button(
+                    onClick = {
+                        scope.launch {
+                            geminiManager.analyzeVideo(
+                                contextInfo = contextInfo,
+                                platform = selectedEngine?.name ?: "Unknown",
+                                personaName = selectedPersona?.name,
+                                personaInstructions = selectedPersona?.instructions,
+                                videoUriString = videoUriString,
+                                engineInstructions = selectedEngine?.instructions,
+                                engineTemplate = selectedEngine?.draftTemplate
+                            )
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth().height(56.dp),
+                    enabled = selectedEngine != null && selectedPersona != null && videoUriString != null,
+                    shape = MaterialTheme.shapes.medium
+                ) {
+                    Text("EXECUTE BLUEPRINT SCAN", fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
                 }
             }
         }
 
-        // 5. EXECUTE
-        item {
-            Button(
-                onClick = {
-                    scope.launch {
-                        geminiManager.analyzeVideo(
-                            contextInfo = contextInfo,
-                            platform = selectedEngine?.name ?: "Unknown",
-                            personaName = selectedPersona?.name,
-                            personaInstructions = selectedPersona?.instructions,
-                            videoUriString = videoUriString,
-                            engineInstructions = selectedEngine?.instructions,
-                            engineTemplate = selectedEngine?.draftTemplate
-                        )
-                    }
-                },
-                modifier = Modifier.fillMaxWidth(),
-                enabled = selectedEngine != null && selectedPersona != null && videoUriString != null
-            ) {
-                Text("EXECUTE BLUEPRINT SCAN")
-            }
-        }
-
-        // 6. LOGS
-        item {
-            Surface(color = Color.Black, modifier = Modifier.fillMaxWidth().height(120.dp).border(1.dp, Color.Green, MaterialTheme.shapes.small)) {
-                val scrollState = rememberScrollState()
-                Text(
-                    text = logs.substringBefore("###ARCHITECT_DRAFT###"),
-                    color = Color.Green,
-                    fontFamily = FontFamily.Monospace,
-                    fontSize = 10.sp,
-                    modifier = Modifier.padding(8.dp).verticalScroll(scrollState)
-                )
-            }
-        }
+        item { Spacer(Modifier.height(16.dp)) }
     }
 
     if (showPersonaSheet) {
