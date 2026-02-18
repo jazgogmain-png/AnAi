@@ -19,16 +19,14 @@ class GeminiManager(
     private val dao: ArchitectDao
 ) {
     private var currentKeyIndex = 0
-    private val _uiLog = MutableStateFlow("[SYSTEM]: Architect Manager Active.")
+    private val _uiLog = MutableStateFlow("[SYSTEM]: Architect Active.")
     val uiLog = _uiLog.asStateFlow()
 
     private suspend fun getNextModel(): GenerativeModel {
         val savedKeys = dao.getAllKeys().first()
-        if (savedKeys.isEmpty()) throw IllegalStateException("Key Vault is Empty!")
-
+        if (savedKeys.isEmpty()) throw IllegalStateException("Key Vault Empty!")
         val key = savedKeys[currentKeyIndex % savedKeys.size].key
         currentKeyIndex++
-
         return GenerativeModel(
             modelName = "gemini-3-flash-preview",
             apiKey = key,
@@ -40,29 +38,31 @@ class GeminiManager(
         if (videoUriString == null) return
         val videoUri = Uri.parse(videoUriString)
 
-        // --- PLATFORM ENGINE: TIKTOK VIRAL PRO ---
+        updateLog(">> Initializing Pixel Scan for $platform...")
+
+        // --- REFINED TIKTOK ENGINE ---
         val platformStyle = when(platform) {
             "TikTok" -> """
-                PLATFORM RULES: TikTok Viral Pro Style.
-                Structure the output as follows:
-                1. VIDEO OVERLAY: A short, high-retention text hook to put on the video screen.
-                2. CAPTION: 
-                   - LINE 1: Aggressive psychological hook.
-                   - LINE 2-3: The main content/joke.
-                   - LINE 4: CTA (e.g., 'Double tap for Lola').
-                3. HASHTAGS: Use '2-2-1' (2 Broad, 2 Niche, 1 Personal/Trending).
-                4. MUSIC/VIBE: Suggest a trending audio style or specific sound effect.
+                Style: Viral TikTok Pro.
+                STRICT HASHTAG BLACKLIST: Do NOT use generic tags like #fyp, #viral, #foryou, or #explore. These cause shadow-bans.
+                STRICT 2-2-1 HASHTAG RULE: Provide exactly 5 HIGH-SIGNAL hashtags:
+                - 2 Broad (e.g., #pinoycars, #filipinocooking)
+                - 2 Niche (Specific to the video actions, e.g., #adoborecipe, #driftcarbuild)
+                - 1 Trending/Personal (Relevant to current Pinoy trends or channel brand).
             """.trimIndent()
-            "YouTube" -> "Focus on SEO Titles (under 70 chars) and first 2 lines of description for search ranking."
-            "Instagram" -> "Focus on aesthetic 'Save-able' value and community engagement CTAs."
+            "YouTube" -> "Style: YouTube Shorts. High-engagement hooks and SEO-rich titles."
+            "Instagram" -> "Style: Aesthetic IG Reel. Focus on community CTAs and visual quality."
             else -> "General Strategy."
         }
 
-        val personaStyle = personaInstructions ?: "Act as a viral strategist."
+        val personaStyle = personaInstructions ?: "Viral strategist."
 
-        updateLog("Executing Pixel Scan | Persona: ${personaName ?: "Standard"}")
+        updateLog(">> Architect is reading video data. Hold tight...")
+        val videoBytes = withContext(Dispatchers.IO) {
+            context.contentResolver.openInputStream(videoUri)?.use { it.readBytes() }
+        }
 
-        val videoBytes = context.contentResolver.openInputStream(videoUri)?.use { it.readBytes() }
+        updateLog(">> Pixels extracted. Consulting G3 $platform Engine...")
 
         runWithRotation { model ->
             model.generateContent(content {
@@ -70,18 +70,32 @@ class GeminiManager(
                 text("""
                     ACT AS: $personaStyle
                     
+                    CRITICAL VOICE NOTE: Do not let the platform formatting weaken your persona. 
+                    Maintain the full Taglish Conyo and Brainrot slang energy in every caption option.
+                    
+                    PLATFORM RULES:
                     $platformStyle
                     
                     USER CONTEXT: $contextInfo
                     
-                    TASK: Analyze pixels and return the strategy block. Keep the voice 100% consistent with the Persona instructions.
+                    TASK: Analyze video pixels. 
+                    FIRST: Give your high-energy commentary in character.
+                    SECOND: You MUST provide the final data in this exact block:
+                    
+                    ###ARCHITECT_DRAFT###
+                    C1: [Full Persona Caption 1 + 5 High-Signal Hashtags]
+                    C2: [Full Persona Caption 2 + 5 High-Signal Hashtags]
+                    C3: [Full Persona Caption 3 + 5 High-Signal Hashtags]
+                    OV: [Video Overlay Text]
+                    MU: [Music Recommendation]
+                    ###END###
                 """.trimIndent())
             })
         }
     }
 
     suspend fun analyzeStats(screenshotUri: Uri, userNotes: String) {
-        updateLog("Analyzing Performance Screenshot...")
+        updateLog(">> Analyzing Performance Data...")
         val imageBytes = context.contentResolver.openInputStream(screenshotUri)?.use { it.readBytes() }
         runWithRotation { model ->
             model.generateContent(content {
@@ -92,7 +106,7 @@ class GeminiManager(
     }
 
     suspend fun chat(message: String) {
-        updateLog("Consulting Architect: $message")
+        updateLog(">> Sending message to Study...")
         runWithRotation { model -> model.generateContent(message) }
     }
 
@@ -100,25 +114,32 @@ class GeminiManager(
         var success = false
         var attempt = 0
         try {
-            val keysCount = dao.getAllKeys().first().size
+            val savedKeys = dao.getAllKeys().first()
+            val keysCount = savedKeys.size
+
             while (attempt < keysCount && !success) {
                 try {
                     val model = getNextModel()
+                    updateLog(">> Node ${currentKeyIndex}: Connection Established...")
+
                     val response = withContext(Dispatchers.IO) { block(model) }
                     response.text?.let {
-                        updateLog("ARCHITECT RESPONSE:\n$it")
+                        updateLog(">> Data Stream Received. Decoding...")
+                        _uiLog.value += "\n\n$it"
                         success = true
                     }
                 } catch (e: Exception) {
                     attempt++
-                    updateLog("Key failure. Rotating...")
+                    updateLog(">> Rotation Active: Node failure. Switching keys...")
                     delay(500)
                 }
             }
         } catch (e: Exception) {
-            updateLog("ERROR: ${e.message}")
+            updateLog(">> CRITICAL ERROR: ${e.message}")
         }
     }
 
-    private fun updateLog(msg: String) { _uiLog.value += "\n\n$msg" }
+    private fun updateLog(msg: String) {
+        _uiLog.value += "\n$msg"
+    }
 }
