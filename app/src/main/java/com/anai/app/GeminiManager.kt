@@ -40,24 +40,24 @@ class GeminiManager(
 
         updateLog(">> Initializing Pixel Scan for $platform...")
 
-        // --- REFINED TIKTOK ENGINE ---
         val platformStyle = when(platform) {
             "TikTok" -> """
-                Style: Viral TikTok Pro.
-                STRICT HASHTAG BLACKLIST: Do NOT use generic tags like #fyp, #viral, #foryou, or #explore. These cause shadow-bans.
-                STRICT 2-2-1 HASHTAG RULE: Provide exactly 5 HIGH-SIGNAL hashtags:
-                - 2 Broad (e.g., #pinoycars, #filipinocooking)
-                - 2 Niche (Specific to the video actions, e.g., #adoborecipe, #driftcarbuild)
-                - 1 Trending/Personal (Relevant to current Pinoy trends or channel brand).
+                Style: TikTok Viral "Group Chat" Mode. All lowercase. 5-12 words.
+                Formula: [reaction] + [disbelief] + [emoji].
+                Hashtags: Exactly 5 high-signal tags using 2-2-1 strategy. NO generic tags.
             """.trimIndent()
-            "YouTube" -> "Style: YouTube Shorts. High-engagement hooks and SEO-rich titles."
-            "Instagram" -> "Style: Aesthetic IG Reel. Focus on community CTAs and visual quality."
+            "Instagram" -> """
+                Style: Aesthetic IG Reels. Short hooks.
+                Hashtags: Exactly 5 niche-specific tags. 
+                Tone: Engaging and visual-focused.
+            """.trimIndent()
+            "YouTube" -> "Style: YouTube Shorts. High-engagement hooks and SEO titles."
             else -> "General Strategy."
         }
 
         val personaStyle = personaInstructions ?: "Viral strategist."
 
-        updateLog(">> Architect is reading video data. Hold tight...")
+        updateLog(">> Architect is reading video data...")
         val videoBytes = withContext(Dispatchers.IO) {
             context.contentResolver.openInputStream(videoUri)?.use { it.readBytes() }
         }
@@ -70,37 +70,24 @@ class GeminiManager(
                 text("""
                     ACT AS: $personaStyle
                     
-                    CRITICAL VOICE NOTE: Do not let the platform formatting weaken your persona. 
-                    Maintain the full Taglish Conyo and Brainrot slang energy in every caption option.
+                    CRITICAL: For TikTok/IG, use "Group Chat Style" (raw, lowercase, no description).
                     
                     PLATFORM RULES:
                     $platformStyle
                     
                     USER CONTEXT: $contextInfo
                     
-                    TASK: Analyze video pixels. 
-                    FIRST: Give your high-energy commentary in character.
-                    SECOND: You MUST provide the final data in this exact block:
+                    TASK: Analyze video pixels and provide strategy.
                     
                     ###ARCHITECT_DRAFT###
-                    C1: [Full Persona Caption 1 + 5 High-Signal Hashtags]
-                    C2: [Full Persona Caption 2 + 5 High-Signal Hashtags]
-                    C3: [Full Persona Caption 3 + 5 High-Signal Hashtags]
-                    OV: [Video Overlay Text]
-                    MU: [Music Recommendation]
+                    C1: [Shock Archetype]
+                    C2: [Relatable Archetype]
+                    C3: [Chaos Archetype]
+                    OV: [Overlay Text]
+                    MU: [Music Tip]
+                    HT: [5 Hashtags]
                     ###END###
                 """.trimIndent())
-            })
-        }
-    }
-
-    suspend fun analyzeStats(screenshotUri: Uri, userNotes: String) {
-        updateLog(">> Analyzing Performance Data...")
-        val imageBytes = context.contentResolver.openInputStream(screenshotUri)?.use { it.readBytes() }
-        runWithRotation { model ->
-            model.generateContent(content {
-                imageBytes?.let { blob("image/png", it) }
-                text("Analyze stats professionally. Notes: $userNotes")
             })
         }
     }
@@ -115,13 +102,10 @@ class GeminiManager(
         var attempt = 0
         try {
             val savedKeys = dao.getAllKeys().first()
-            val keysCount = savedKeys.size
-
-            while (attempt < keysCount && !success) {
+            while (attempt < savedKeys.size && !success) {
                 try {
                     val model = getNextModel()
                     updateLog(">> Node ${currentKeyIndex}: Connection Established...")
-
                     val response = withContext(Dispatchers.IO) { block(model) }
                     response.text?.let {
                         updateLog(">> Data Stream Received. Decoding...")
@@ -130,16 +114,14 @@ class GeminiManager(
                     }
                 } catch (e: Exception) {
                     attempt++
-                    updateLog(">> Rotation Active: Node failure. Switching keys...")
+                    updateLog(">> Rotation Active: Node failure...")
                     delay(500)
                 }
             }
         } catch (e: Exception) {
-            updateLog(">> CRITICAL ERROR: ${e.message}")
+            updateLog(">> ERROR: ${e.message}")
         }
     }
 
-    private fun updateLog(msg: String) {
-        _uiLog.value += "\n$msg"
-    }
+    private fun updateLog(msg: String) { _uiLog.value += "\n$msg" }
 }

@@ -12,12 +12,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
-import kotlinx.coroutines.launch // THE MISSING IMPORT
+import kotlinx.coroutines.launch
 
 @Composable
 fun ChatScreen(geminiManager: GeminiManager) {
     var chatInput by remember { mutableStateOf("") }
-    val scope = rememberCoroutineScope() // Using the proper Compose scope
+    val scope = rememberCoroutineScope()
 
     val logs by geminiManager.uiLog.collectAsState()
 
@@ -28,11 +28,15 @@ fun ChatScreen(geminiManager: GeminiManager) {
             color = MaterialTheme.colorScheme.primary
         )
 
+        // --- CONVERSATION WINDOW ---
         Box(modifier = Modifier.weight(1f).padding(vertical = 8.dp)) {
-            LazyColumn(modifier = Modifier.fillMaxSize()) {
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                reverseLayout = false // Keeps the matrix feel scrolling down
+            ) {
                 item {
                     Text(
-                        text = logs,
+                        text = logs.substringBefore("###ARCHITECT_DRAFT###"), // Hides the technical draft block
                         style = MaterialTheme.typography.bodyMedium,
                         fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
                         color = Color(0xFF00FF00),
@@ -45,6 +49,7 @@ fun ChatScreen(geminiManager: GeminiManager) {
             }
         }
 
+        // --- MESSAGE INPUT ---
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
@@ -53,7 +58,7 @@ fun ChatScreen(geminiManager: GeminiManager) {
                 value = chatInput,
                 onValueChange = { chatInput = it },
                 modifier = Modifier.weight(1f),
-                placeholder = { Text("Refine the viral hook...") },
+                placeholder = { Text("Ask Lola for a better hook...") },
                 maxLines = 3
             )
             Spacer(modifier = Modifier.width(8.dp))
@@ -62,7 +67,6 @@ fun ChatScreen(geminiManager: GeminiManager) {
                     if (chatInput.isNotBlank()) {
                         val msg = chatInput
                         chatInput = ""
-                        // FIXED: Using the UI scope correctly
                         scope.launch {
                             geminiManager.chat(msg)
                         }
