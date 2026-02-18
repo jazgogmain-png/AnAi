@@ -25,16 +25,16 @@ import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.ui.PlayerView
 import com.anai.app.database.ArchitectDao
+import com.anai.app.database.EngineEntity
 import com.anai.app.database.PersonaEntity
 import kotlinx.coroutines.launch
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun DashboardScreen(
     geminiManager: GeminiManager,
@@ -44,97 +44,82 @@ fun DashboardScreen(
     val scope = rememberCoroutineScope()
     val clipboardManager = LocalClipboardManager.current
     val context = LocalContext.current
-    val sheetState = rememberModalBottomSheetState()
     var showPersonaSheet by remember { mutableStateOf(false) }
 
-    // --- SHARED STATE ---
+    // --- DATABASE STATE ---
+    val personas by dao.getAllPersonas().collectAsState(initial = emptyList())
+    val engines by dao.getAllEngines().collectAsState(initial = emptyList())
+
+    // --- SHARED UI STATE ---
     var videoUriString by rememberSaveable { mutableStateOf<String?>(null) }
     var contextInfo by rememberSaveable { mutableStateOf("") }
-    var selectedPlatform by rememberSaveable { mutableStateOf("TikTok") }
     var selectedPersona by remember { mutableStateOf<PersonaEntity?>(null) }
-    val personas by dao.getAllPersonas().collectAsState(initial = emptyList())
-
-    // --- DRAFT BOARD STATE ---
-    val captionOptions = remember { mutableStateListOf("", "", "") }
+    var selectedEngine by remember { mutableStateOf<EngineEntity?>(null) }
     var activeCaptionIndex by rememberSaveable { mutableIntStateOf(0) }
-    var overlayText by rememberSaveable { mutableStateOf("") }
-    var musicTip by rememberSaveable { mutableStateOf("") }
 
+    // --- OBSERVE PERSISTENT DATA FROM MANAGER ---
     val logs by geminiManager.uiLog.collectAsState()
-
-    // --- THE DATA CATCHER ---
-    LaunchedEffect(logs) {
-        if (logs.contains("###ARCHITECT_DRAFT###")) {
-            val draftPart = logs.substringAfter("###ARCHITECT_DRAFT###").substringBefore("###END###")
-            val lines = draftPart.trim().lines()
-            var currentHashtags = ""
-
-            // First pass to find hashtags
-            lines.forEach { if (it.startsWith("HT:")) currentHashtags = it.removePrefix("HT:").trim() }
-
-            // Second pass to fill captions and attach hashtags
-            lines.forEach { line ->
-                when {
-                    line.startsWith("C1:") -> captionOptions[0] = "${line.removePrefix("C1:").trim()}\n\n$currentHashtags"
-                    line.startsWith("C2:") -> captionOptions[1] = "${line.removePrefix("C2:").trim()}\n\n$currentHashtags"
-                    line.startsWith("C3:") -> captionOptions[2] = "${line.removePrefix("C3:").trim()}\n\n$currentHashtags"
-                    line.startsWith("OV:") -> overlayText = line.removePrefix("OV:").trim()
-                    line.startsWith("MU:") -> musicTip = line.removePrefix("MU:").trim()
-                }
-            }
-        }
-    }
+    val captionOptions by geminiManager.captionOptions.collectAsState()
+    val overlayText by geminiManager.overlayText.collectAsState()
+    val musicTip by geminiManager.musicTip.collectAsState()
+    val seoTags by geminiManager.seoTags.collectAsState()
 
     val videoUri = videoUriString?.let { Uri.parse(it) }
     val videoPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
-        uri?.let { videoUriString = it.toString(); mediaManager.loadVideo(it) }
+        uri?.let { videoUriString = it.toString(); mediaManager.loadVideo(it); geminiManager.clearLog() }
     }
 
-    LazyColumn(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    LazyColumn(
+        modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
         item { Spacer(Modifier.height(8.dp)) }
 
         // 1. MEDIA PREVIEW & RESET
         item {
-            Column {
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                    Text("Architect Workspace", style = MaterialTheme.typography.labelLarge)
-                    TextButton(onClick = {
-                        videoUriString = null
-                        contextInfo = ""
-                        captionOptions[0] = ""; captionOptions[1] = ""; captionOptions[2] = ""
-                        overlayText = ""; musicTip = ""
-                    }) {
-                        Icon(Icons.Default.Refresh, null, modifier = Modifier.size(16.dp))
-                        Spacer(Modifier.width(4.dp))
-                        Text("Reset")
-                    }
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                Text("Architect Workspace", style = MaterialTheme.typography.labelLarge)
+                TextButton(onClick = {
+                    videoUriString = null
+                    contextInfo = ""
+                    geminiManager.clearLog()
+                }) {
+                    Icon(Icons.Default.Refresh, null, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(4.dp))
+                    Text("Reset")
                 }
-                Card(modifier = Modifier.fillMaxWidth().height(180.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
-                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        if (videoUri != null) AndroidView(factory = { ctx -> PlayerView(ctx).apply { player = mediaManager.player } }, modifier = Modifier.fillMaxSize())
-                        else Button(onClick = { videoPicker.launch("video/*") }) { Icon(Icons.Default.PlayArrow, null); Text("Pick Video") }
-                    }
+            }
+            Card(modifier = Modifier.fillMaxWidth().height(180.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    if (videoUri != null) AndroidView(factory = { ctx -> PlayerView(ctx).apply { player = mediaManager.player } }, modifier = Modifier.fillMaxSize())
+                    else Button(onClick = { videoPicker.launch("video/*") }) { Icon(Icons.Default.PlayArrow, null); Text("Pick Video") }
                 }
             }
         }
 
-        // 2. PERSONA & PLATFORM
+        // 2. MODULAR SELECTION (SOUL & SCRIPT)
         item {
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                OutlinedCard(onClick = { showPersonaSheet = true }, modifier = Modifier.weight(0.4f)) {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                // Persona Selection
+                OutlinedCard(onClick = { showPersonaSheet = true }, modifier = Modifier.fillMaxWidth()) {
                     Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Default.Person, null, modifier = Modifier.size(16.dp))
                         Spacer(Modifier.width(8.dp))
-                        Text(selectedPersona?.name?.take(8) ?: "Persona", maxLines = 1, fontSize = 11.sp)
+                        Text(selectedPersona?.name ?: "Select Persona Soul", fontSize = 12.sp)
                     }
                 }
-                Row(modifier = Modifier.weight(0.6f), horizontalArrangement = Arrangement.End) {
-                    listOf("TikTok", "YouTube", "Instagram").forEach { platform ->
+
+                // Platform Engine Selection (Chips wrap automatically)
+                Text("Platform Engine Blueprint:", style = MaterialTheme.typography.labelSmall)
+                FlowRow(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    engines.forEach { engine ->
                         FilterChip(
-                            selected = selectedPlatform == platform,
-                            onClick = { selectedPlatform = platform },
-                            label = { Text(platform, fontSize = 10.sp) },
-                            modifier = Modifier.padding(start = 4.dp)
+                            selected = selectedEngine?.id == engine.id,
+                            onClick = { selectedEngine = engine },
+                            label = { Text(engine.name, fontSize = 10.sp) }
                         )
                     }
                 }
@@ -145,25 +130,21 @@ fun DashboardScreen(
         item {
             Column(modifier = Modifier.fillMaxWidth().border(1.dp, MaterialTheme.colorScheme.outline, MaterialTheme.shapes.medium).padding(12.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("Caption Station", style = MaterialTheme.typography.labelLarge)
+                    Text("Strategy Output", style = MaterialTheme.typography.labelLarge)
                     Spacer(Modifier.weight(1f))
                     listOf("SHK", "REL", "CHS").forEachIndexed { index, label ->
-                        InputChip(
-                            selected = activeCaptionIndex == index,
-                            onClick = { activeCaptionIndex = index },
-                            label = { Text(label, fontSize = 9.sp) },
-                            modifier = Modifier.padding(start = 4.dp)
-                        )
+                        InputChip(selected = activeCaptionIndex == index, onClick = { activeCaptionIndex = index }, label = { Text(label, fontSize = 9.sp) }, modifier = Modifier.padding(start = 4.dp))
                     }
                 }
+                val currentCap = if (captionOptions.size > activeCaptionIndex) captionOptions[activeCaptionIndex] else ""
                 OutlinedTextField(
-                    value = captionOptions[activeCaptionIndex],
-                    onValueChange = { captionOptions[activeCaptionIndex] = it },
+                    value = currentCap,
+                    onValueChange = {},
                     modifier = Modifier.fillMaxWidth().heightIn(min = 100.dp).pointerInput(Unit) {
                         detectTapGestures(onDoubleTap = {
-                            if (captionOptions[activeCaptionIndex].isNotBlank()) {
-                                clipboardManager.setText(AnnotatedString(captionOptions[activeCaptionIndex]))
-                                Toast.makeText(context, "Copied to clipboard!", Toast.LENGTH_SHORT).show()
+                            if (currentCap.isNotBlank()) {
+                                clipboardManager.setText(AnnotatedString(currentCap))
+                                Toast.makeText(context, "Copied!", Toast.LENGTH_SHORT).show()
                             }
                         })
                     },
@@ -172,30 +153,59 @@ fun DashboardScreen(
             }
         }
 
-        // 4. OVERLAY & MUSIC STRIP
+        // 4. METADATA & SEO
         item {
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedTextField(value = overlayText, onValueChange = { overlayText = it }, label = { Text("Overlay") }, modifier = Modifier.weight(1f).pointerInput(Unit) {
-                    detectTapGestures(onDoubleTap = { clipboardManager.setText(AnnotatedString(overlayText)); Toast.makeText(context, "Overlay Copied!", Toast.LENGTH_SHORT).show() })
-                })
-                OutlinedTextField(value = musicTip, onValueChange = { musicTip = it }, label = { Text("Music") }, modifier = Modifier.weight(1f).pointerInput(Unit) {
-                    detectTapGestures(onDoubleTap = { clipboardManager.setText(AnnotatedString(musicTip)); Toast.makeText(context, "Music Copied!", Toast.LENGTH_SHORT).show() })
-                })
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(value = overlayText, onValueChange = {}, label = { Text("Overlay") }, modifier = Modifier.weight(1f).pointerInput(Unit) {
+                        detectTapGestures(onDoubleTap = { clipboardManager.setText(AnnotatedString(overlayText)); Toast.makeText(context, "Overlay Copied!", Toast.LENGTH_SHORT).show() })
+                    })
+                    OutlinedTextField(value = musicTip, onValueChange = {}, label = { Text("Music") }, modifier = Modifier.weight(1f).pointerInput(Unit) {
+                        detectTapGestures(onDoubleTap = { clipboardManager.setText(AnnotatedString(musicTip)); Toast.makeText(context, "Music Copied!", Toast.LENGTH_SHORT).show() })
+                    })
+                }
+                if (seoTags.isNotBlank()) {
+                    OutlinedTextField(value = seoTags, onValueChange = {}, label = { Text("SEO / Backend Tags") }, modifier = Modifier.fillMaxWidth().pointerInput(Unit) {
+                        detectTapGestures(onDoubleTap = { clipboardManager.setText(AnnotatedString(seoTags)); Toast.makeText(context, "Tags Copied!", Toast.LENGTH_SHORT).show() })
+                    })
+                }
             }
         }
 
-        // 5. ACTION
+        // 5. EXECUTE
         item {
-            Button(onClick = { scope.launch { geminiManager.analyzeVideo(contextInfo, selectedPlatform, selectedPersona?.name, selectedPersona?.instructions, videoUriString) } }, modifier = Modifier.fillMaxWidth()) {
-                Text("EXECUTE VIRAL SCAN")
+            Button(
+                onClick = {
+                    scope.launch {
+                        geminiManager.analyzeVideo(
+                            contextInfo = contextInfo,
+                            platform = selectedEngine?.name ?: "Unknown",
+                            personaName = selectedPersona?.name,
+                            personaInstructions = selectedPersona?.instructions,
+                            videoUriString = videoUriString,
+                            engineInstructions = selectedEngine?.instructions,
+                            engineTemplate = selectedEngine?.draftTemplate
+                        )
+                    }
+                },
+                modifier = Modifier.fillMaxWidth(),
+                enabled = selectedEngine != null && selectedPersona != null && videoUriString != null
+            ) {
+                Text("EXECUTE BLUEPRINT SCAN")
             }
         }
 
-        // 6. NERD LOG
+        // 6. LOGS
         item {
             Surface(color = Color.Black, modifier = Modifier.fillMaxWidth().height(120.dp).border(1.dp, Color.Green, MaterialTheme.shapes.small)) {
                 val scrollState = rememberScrollState()
-                Text(logs.substringBefore("###ARCHITECT_DRAFT###"), color = Color.Green, fontFamily = FontFamily.Monospace, fontSize = 10.sp, modifier = Modifier.padding(8.dp).verticalScroll(scrollState))
+                Text(
+                    text = logs.substringBefore("###ARCHITECT_DRAFT###"),
+                    color = Color.Green,
+                    fontFamily = FontFamily.Monospace,
+                    fontSize = 10.sp,
+                    modifier = Modifier.padding(8.dp).verticalScroll(scrollState)
+                )
             }
         }
     }

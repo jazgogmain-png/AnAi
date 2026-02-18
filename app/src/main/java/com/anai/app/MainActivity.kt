@@ -28,13 +28,19 @@ import androidx.compose.runtime.rememberCoroutineScope
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // 1. Initialize Database
         val database = ArchitectDatabase.getDatabase(this)
         val dao = database.architectDao()
+
+        // 2. Initialize Managers OUTSIDE of Composable to prevent re-init crashes
+        val mediaManager = MediaManager(this)
+        val geminiManager = GeminiManager(this, mediaManager, dao)
 
         setContent {
             MaterialTheme(colorScheme = darkColorScheme()) {
                 Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-                    MainAppScaffold(dao)
+                    MainAppScaffold(geminiManager, mediaManager, dao)
                 }
             }
         }
@@ -42,17 +48,16 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-fun MainAppScaffold(dao: com.anai.app.database.ArchitectDao) {
-    val context = androidx.compose.ui.platform.LocalContext.current
+fun MainAppScaffold(
+    geminiManager: GeminiManager,
+    mediaManager: MediaManager,
+    dao: com.anai.app.database.ArchitectDao
+) {
     val scope = rememberCoroutineScope()
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
 
     // NAVIGATION STATE
     var currentScreen by remember { mutableStateOf("Architect") }
-
-    // SHARED APP STATE (Now managing persistence through DAO)
-    val mediaManager = remember { MediaManager(context) }
-    val geminiManager = remember { GeminiManager(context, mediaManager, dao) }
 
     ModalNavigationDrawer(
         drawerState = drawerState,
@@ -71,7 +76,7 @@ fun MainAppScaffold(dao: com.anai.app.database.ArchitectDao) {
                     modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)
                 )
                 NavigationDrawerItem(
-                    label = { Text("Blueprints (Personas)") },
+                    label = { Text("Blueprint Factory") }, // Renamed for modularity
                     selected = currentScreen == "Blueprints",
                     icon = { Icon(Icons.Default.List, null) },
                     onClick = { currentScreen = "Blueprints"; scope.launch { drawerState.close() } },

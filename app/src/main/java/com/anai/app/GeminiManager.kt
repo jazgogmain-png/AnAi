@@ -22,6 +22,19 @@ class GeminiManager(
     private val _uiLog = MutableStateFlow("[SYSTEM]: Architect Active.")
     val uiLog = _uiLog.asStateFlow()
 
+    // --- PERSISTENT DRAFT STATE (Survives Minimize) ---
+    private val _captionOptions = MutableStateFlow(listOf("", "", ""))
+    val captionOptions = _captionOptions.asStateFlow()
+
+    private val _overlayText = MutableStateFlow("")
+    val overlayText = _overlayText.asStateFlow()
+
+    private val _musicTip = MutableStateFlow("")
+    val musicTip = _musicTip.asStateFlow()
+
+    private val _seoTags = MutableStateFlow("")
+    val seoTags = _seoTags.asStateFlow()
+
     private suspend fun getNextModel(): GenerativeModel {
         val savedKeys = dao.getAllKeys().first()
         if (savedKeys.isEmpty()) throw IllegalStateException("Key Vault Empty!")
@@ -34,35 +47,29 @@ class GeminiManager(
         )
     }
 
-    suspend fun analyzeVideo(contextInfo: String, platform: String, personaName: String?, personaInstructions: String?, videoUriString: String?) {
+    // UPDATED: Now fully agnostic. Uses blueprints from your Database.
+    suspend fun analyzeVideo(
+        contextInfo: String,
+        platform: String,
+        personaName: String?,
+        personaInstructions: String?,
+        videoUriString: String?,
+        engineInstructions: String?,
+        engineTemplate: String?
+    ) {
         if (videoUriString == null) return
         val videoUri = Uri.parse(videoUriString)
 
-        updateLog(">> Initializing Pixel Scan for $platform...")
+        updateLog(">> Initializing $platform Engine Blueprint...")
 
-        val platformStyle = when(platform) {
-            "TikTok" -> """
-                Style: TikTok Viral "Group Chat" Mode. All lowercase. 5-12 words.
-                Formula: [reaction] + [disbelief] + [emoji].
-                Hashtags: Exactly 5 high-signal tags using 2-2-1 strategy. NO generic tags.
-            """.trimIndent()
-            "Instagram" -> """
-                Style: Aesthetic IG Reels. Short hooks.
-                Hashtags: Exactly 5 niche-specific tags. 
-                Tone: Engaging and visual-focused.
-            """.trimIndent()
-            "YouTube" -> "Style: YouTube Shorts. High-engagement hooks and SEO titles."
-            else -> "General Strategy."
-        }
+        val personaStyle = personaInstructions ?: "Standard viral strategist."
+        val finalEngineRules = engineInstructions ?: "Analyze for social media virality."
+        val finalTemplate = engineTemplate ?: "###ARCHITECT_DRAFT###\nC1: [Option 1]\n###END###"
 
-        val personaStyle = personaInstructions ?: "Viral strategist."
-
-        updateLog(">> Architect is reading video data...")
+        updateLog(">> Reading pixels for ${personaName ?: "Unknown Persona"}...")
         val videoBytes = withContext(Dispatchers.IO) {
             context.contentResolver.openInputStream(videoUri)?.use { it.readBytes() }
         }
-
-        updateLog(">> Pixels extracted. Consulting G3 $platform Engine...")
 
         runWithRotation { model ->
             model.generateContent(content {
@@ -70,57 +77,79 @@ class GeminiManager(
                 text("""
                     ACT AS: $personaStyle
                     
-                    CRITICAL: For TikTok/IG, use "Group Chat Style" (raw, lowercase, no description).
+                    TASK: Analyze pixels and fulfill the $platform strategy.
                     
-                    PLATFORM RULES:
-                    $platformStyle
+                    ENGINE BLUEPRINT RULES:
+                    $finalEngineRules
                     
                     USER CONTEXT: $contextInfo
                     
-                    TASK: Analyze video pixels and provide strategy.
-                    
-                    ###ARCHITECT_DRAFT###
-                    C1: [Shock Archetype]
-                    C2: [Relatable Archetype]
-                    C3: [Chaos Archetype]
-                    OV: [Overlay Text]
-                    MU: [Music Tip]
-                    HT: [5 Hashtags]
-                    ###END###
+                    YOU MUST PROVIDE THE DATA IN THIS EXACT FORMAT:
+                    $finalTemplate
                 """.trimIndent())
             })
         }
     }
 
     suspend fun chat(message: String) {
-        updateLog(">> Sending message to Study...")
+        updateLog(">> Consulting Architect...")
         runWithRotation { model -> model.generateContent(message) }
+    }
+
+    fun clearLog() {
+        _uiLog.value = "[SYSTEM]: Architect Ready."
+        _captionOptions.value = listOf("", "", "")
+        _overlayText.value = ""
+        _musicTip.value = ""
+        _seoTags.value = ""
     }
 
     private suspend fun runWithRotation(block: suspend (GenerativeModel) -> com.google.ai.client.generativeai.type.GenerateContentResponse) {
         var success = false
         var attempt = 0
-        try {
-            val savedKeys = dao.getAllKeys().first()
-            while (attempt < savedKeys.size && !success) {
-                try {
-                    val model = getNextModel()
-                    updateLog(">> Node ${currentKeyIndex}: Connection Established...")
-                    val response = withContext(Dispatchers.IO) { block(model) }
-                    response.text?.let {
-                        updateLog(">> Data Stream Received. Decoding...")
-                        _uiLog.value += "\n\n$it"
-                        success = true
-                    }
-                } catch (e: Exception) {
-                    attempt++
-                    updateLog(">> Rotation Active: Node failure...")
-                    delay(500)
+        val savedKeys = dao.getAllKeys().first()
+        while (attempt < savedKeys.size && !success) {
+            try {
+                val model = getNextModel()
+                val response = withContext(Dispatchers.IO) { block(model) }
+                response.text?.let { raw ->
+                    updateLog(">> Data Stream Received. Decoding...")
+                    _uiLog.value += "\n\n$raw"
+                    if (raw.contains("###ARCHITECT_DRAFT###")) parseDraft(raw)
+                    success = true
                 }
+            } catch (e: Exception) {
+                attempt++
+                updateLog(">> Key Rotation Node failure...")
+                delay(500)
             }
-        } catch (e: Exception) {
-            updateLog(">> ERROR: ${e.message}")
         }
+    }
+
+    private fun parseDraft(raw: String) {
+        val draft = raw.substringAfter("###ARCHITECT_DRAFT###").substringBefore("###END###")
+        val lines = draft.trim().lines()
+        var hts = ""
+        var tgs = ""
+
+        lines.forEach {
+            if (it.startsWith("HT:")) hts = it.removePrefix("HT:").trim()
+            if (it.startsWith("TAGS:")) tgs = it.removePrefix("TAGS:").trim()
+        }
+
+        val caps = mutableListOf("", "", "")
+        lines.forEach { line ->
+            when {
+                line.startsWith("C1:") -> caps[0] = "${line.removePrefix("C1:").trim()}\n\n$hts".trim()
+                line.startsWith("C2:") -> caps[1] = "${line.removePrefix("C2:").trim()}\n\n$hts".trim()
+                line.startsWith("C3:") -> caps[2] = "${line.removePrefix("C3:").trim()}\n\n$hts".trim()
+            }
+        }
+
+        _captionOptions.value = caps
+        _overlayText.value = lines.find { it.startsWith("OV:") }?.removePrefix("OV:")?.trim() ?: ""
+        _musicTip.value = lines.find { it.startsWith("MU:") }?.removePrefix("MU:")?.trim() ?: ""
+        _seoTags.value = tgs
     }
 
     private fun updateLog(msg: String) { _uiLog.value += "\n$msg" }
