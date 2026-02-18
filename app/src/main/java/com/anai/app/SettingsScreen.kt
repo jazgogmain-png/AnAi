@@ -31,46 +31,55 @@ fun SettingsScreen(dao: ArchitectDao) {
             value = bulkKeysInput,
             onValueChange = { bulkKeysInput = it },
             label = { Text("Paste Keys (One Per Line)") },
-            modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
-            minLines = 3
+            modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp)
         )
+
         Button(
             onClick = {
-                val newKeys = bulkKeysInput.lines().map { it.trim() }.filter { it.isNotEmpty() }
+                val keys = bulkKeysInput.lines().filter { it.isNotBlank() }
                 scope.launch {
-                    newKeys.forEach { dao.saveKey(KeyEntity(it)) }
+                    keys.forEach {
+                        // FIXED: Matches the (ID, Key) structure
+                        dao.saveKey(KeyEntity(key = it.trim()))
+                    }
                     bulkKeysInput = ""
                 }
             },
-            modifier = Modifier.align(Alignment.End)
-        ) { Text("Save to Vault") }
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("ADD KEYS TO VAULT")
+        }
 
-        Spacer(modifier = Modifier.height(16.dp))
-        HorizontalDivider()
+        HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
 
-        // --- KEY LIST ---
+        // --- LIST OF KEYS ---
         LazyColumn(modifier = Modifier.weight(1f)) {
-            items(savedKeys) { keyEntity ->
+            items(savedKeys) { keyObj ->
                 ListItem(
-                    headlineContent = { Text(keyEntity.key.take(8) + "****************") },
+                    headlineContent = { Text(keyObj.key.take(15) + "...") },
                     trailingContent = {
-                        IconButton(onClick = { scope.launch { dao.deleteKey(keyEntity.key) } }) {
-                            Icon(Icons.Default.Delete, null)
+                        IconButton(onClick = {
+                            scope.launch {
+                                // FIXED: Passes the whole Entity
+                                dao.deleteKey(keyObj)
+                            }
+                        }) {
+                            Icon(Icons.Default.Delete, null, tint = MaterialTheme.colorScheme.error)
                         }
                     }
                 )
             }
         }
 
-        // --- NUCLEAR SECTION ---
+        // --- NUCLEAR RESET ---
         Button(
             onClick = { showNuclearDialog = true },
-            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
-            modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)
+            modifier = Modifier.fillMaxWidth(),
+            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
         ) {
             Icon(Icons.Default.Delete, null)
             Spacer(Modifier.width(8.dp))
-            Text("Clear All Data (Nuclear)")
+            Text("Clear History (Nuclear)")
         }
 
         if (showNuclearDialog) {
@@ -108,6 +117,8 @@ fun NuclearResetDialog(onConfirm: () -> Unit, onDismiss: () -> Unit) {
                 colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
             ) { Text("WIPE") }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("CANCEL") }
+        }
     )
 }

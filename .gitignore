@@ -13,3 +13,8 @@
 .externalNativeBuild
 .cxx
 local.properties
+/app/build
+# Important: Don't upload your local test database
+*.db
+*.db-shm
+*.db-wal

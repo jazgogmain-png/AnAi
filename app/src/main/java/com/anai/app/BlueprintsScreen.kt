@@ -23,7 +23,6 @@ fun BlueprintsScreen(dao: ArchitectDao) {
     var nameInput by remember { mutableStateOf("") }
     var promptInput by remember { mutableStateOf("") }
 
-    // Using LazyColumn for the entire screen makes everything scrollable together
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
@@ -36,44 +35,37 @@ fun BlueprintsScreen(dao: ArchitectDao) {
             Text("Define Blueprints to automate Gemini's style.", style = MaterialTheme.typography.bodySmall)
         }
 
-        // --- ADD NEW PERSONA SECTION ---
+        // --- INPUT SECTION ---
         item {
-            Card(modifier = Modifier.fillMaxWidth()) {
-                Column(
-                    modifier = Modifier.padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    OutlinedTextField(
-                        value = nameInput,
-                        onValueChange = { nameInput = it },
-                        label = { Text("Persona Name (e.g., TikTok Lola)") },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true
-                    )
-                    OutlinedTextField(
-                        value = promptInput,
-                        onValueChange = { promptInput = it },
-                        label = { Text("Instructions") },
-                        modifier = Modifier.fillMaxWidth(),
-                        minLines = 3,
-                        maxLines = 8 // Keeps the box from eating the whole screen
-                    )
-                    Button(
-                        onClick = {
-                            if (nameInput.isNotBlank() && promptInput.isNotBlank()) {
-                                scope.launch {
-                                    dao.savePersona(PersonaEntity(nameInput, promptInput))
-                                    nameInput = ""
-                                    promptInput = ""
-                                }
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(
+                    value = nameInput,
+                    onValueChange = { nameInput = it },
+                    label = { Text("Persona Name (e.g. Lola)") },
+                    modifier = Modifier.fillMaxWidth()
+                )
+                OutlinedTextField(
+                    value = promptInput,
+                    onValueChange = { promptInput = it },
+                    label = { Text("Instructions (How should it act?)") },
+                    modifier = Modifier.fillMaxWidth().height(120.dp)
+                )
+                Button(
+                    onClick = {
+                        if (nameInput.isNotBlank() && promptInput.isNotBlank()) {
+                            scope.launch {
+                                // FIXED: Matches the new (ID, Name, Instructions) structure
+                                dao.savePersona(PersonaEntity(name = nameInput, instructions = promptInput))
+                                nameInput = ""
+                                promptInput = ""
                             }
-                        },
-                        modifier = Modifier.align(Alignment.End)
-                    ) {
-                        Icon(Icons.Default.Add, null)
-                        Spacer(Modifier.width(8.dp))
-                        Text("Save Persona")
-                    }
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(Icons.Default.Add, null)
+                    Spacer(Modifier.width(8.dp))
+                    Text("SAVE BLUEPRINT")
                 }
             }
         }
@@ -100,11 +92,14 @@ fun BlueprintsScreen(dao: ArchitectDao) {
                         Text(
                             persona.instructions,
                             style = MaterialTheme.typography.bodySmall,
-                            maxLines = 3 // Prevents long prompts from making the list messy
+                            maxLines = 3
                         )
                     }
                     IconButton(onClick = {
-                        scope.launch { dao.deletePersona(persona.name) }
+                        scope.launch {
+                            // FIXED: Now passes the whole Entity to the delete function
+                            dao.deletePersona(persona)
+                        }
                     }) {
                         Icon(Icons.Default.Delete, null, tint = MaterialTheme.colorScheme.error)
                     }

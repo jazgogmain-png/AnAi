@@ -1,7 +1,6 @@
 package com.anai.app.database
 
 import androidx.room.*
-import android.content.Context
 import kotlinx.coroutines.flow.Flow
 
 @Entity(tableName = "architect_history")
@@ -15,13 +14,24 @@ data class ArchitectEntry(
 
 @Entity(tableName = "personas")
 data class PersonaEntity(
-    @PrimaryKey val name: String,
+    @PrimaryKey(autoGenerate = true) val id: Int = 0,
+    val name: String,
     val instructions: String
+)
+
+// --- NEW ENTITY ---
+@Entity(tableName = "engines")
+data class EngineEntity(
+    @PrimaryKey(autoGenerate = true) val id: Int = 0,
+    val name: String,
+    val instructions: String,
+    val draftTemplate: String
 )
 
 @Entity(tableName = "api_keys")
 data class KeyEntity(
-    @PrimaryKey val key: String
+    @PrimaryKey(autoGenerate = true) val id: Int = 0,
+    val key: String
 )
 
 @Dao
@@ -42,8 +52,18 @@ interface ArchitectDao {
     @Query("SELECT * FROM personas")
     fun getAllPersonas(): Flow<List<PersonaEntity>>
 
-    @Query("DELETE FROM personas WHERE name = :name")
-    suspend fun deletePersona(name: String)
+    @Delete
+    suspend fun deletePersona(persona: PersonaEntity)
+
+    // --- ENGINE METHODS ---
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun saveEngine(engine: EngineEntity)
+
+    @Query("SELECT * FROM engines")
+    fun getAllEngines(): Flow<List<EngineEntity>>
+
+    @Delete
+    suspend fun deleteEngine(engine: EngineEntity)
 
     // --- KEY VAULT METHODS ---
     @Insert(onConflict = OnConflictStrategy.REPLACE)
@@ -52,26 +72,6 @@ interface ArchitectDao {
     @Query("SELECT * FROM api_keys")
     fun getAllKeys(): Flow<List<KeyEntity>>
 
-    @Query("DELETE FROM api_keys WHERE `key` = :key")
-    suspend fun deleteKey(key: String)
-}
-
-@Database(entities = [ArchitectEntry::class, PersonaEntity::class, KeyEntity::class], version = 5)
-abstract class ArchitectDatabase : RoomDatabase() {
-    abstract fun architectDao(): ArchitectDao
-
-    companion object {
-        @Volatile private var INSTANCE: ArchitectDatabase? = null
-        fun getDatabase(context: Context): ArchitectDatabase {
-            return INSTANCE ?: synchronized(this) {
-                val instance = Room.databaseBuilder(
-                    context.applicationContext,
-                    ArchitectDatabase::class.java,
-                    "anai_architect_db"
-                ).fallbackToDestructiveMigration().build()
-                INSTANCE = instance
-                instance
-            }
-        }
-    }
+    @Delete
+    suspend fun deleteKey(key: KeyEntity)
 }
