@@ -1,55 +1,74 @@
 package com.anai.app.database
 
-import androidx.room.Entity
-import androidx.room.PrimaryKey
-import androidx.room.Dao
-import androidx.room.Insert
-import androidx.room.Query
-import androidx.room.Database
-import androidx.room.RoomDatabase
+import androidx.room.*
 import android.content.Context
-import androidx.room.Room
+import kotlinx.coroutines.flow.Flow
 
-/**
- * The core data model for every "Save Point" in the app.
- * We use the timestamp as the name/ID as you suggested.
- */
 @Entity(tableName = "architect_history")
 data class ArchitectEntry(
     @PrimaryKey val timestamp: Long = System.currentTimeMillis(),
-    val type: String, // "VIDEO_SCAN", "STATS_SCREENSHOT", or "CHAT"
-    val inputContext: String, // Your text input or the prompt used
-    val aiResponse: String,   // What Gemini 3 Flash returned
-    val mediaUri: String? = null // Path to the video or screenshot if applicable
+    val type: String,
+    val inputContext: String,
+    val aiResponse: String,
+    val mediaUri: String? = null
+)
+
+@Entity(tableName = "personas")
+data class PersonaEntity(
+    @PrimaryKey val name: String,
+    val instructions: String
+)
+
+@Entity(tableName = "api_keys")
+data class KeyEntity(
+    @PrimaryKey val key: String
 )
 
 @Dao
 interface ArchitectDao {
-    @Insert
-    suspend fun insertEntry(entry: ArchitectEntry)
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertEntry(entry: ArchitectEntry): Long
 
     @Query("SELECT * FROM architect_history ORDER BY timestamp DESC")
-    fun getAllHistory(): kotlinx.coroutines.flow.Flow<List<ArchitectEntry>>
+    fun getAllHistory(): Flow<List<ArchitectEntry>>
 
-    @Query("DELETE FROM architect_history WHERE timestamp = :id")
-    suspend fun deleteEntry(id: Long)
+    @Query("DELETE FROM architect_history")
+    suspend fun nukeHistory()
+
+    // --- PERSONA METHODS ---
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun savePersona(persona: PersonaEntity)
+
+    @Query("SELECT * FROM personas")
+    fun getAllPersonas(): Flow<List<PersonaEntity>>
+
+    @Query("DELETE FROM personas WHERE name = :name")
+    suspend fun deletePersona(name: String)
+
+    // --- KEY VAULT METHODS ---
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun saveKey(key: KeyEntity)
+
+    @Query("SELECT * FROM api_keys")
+    fun getAllKeys(): Flow<List<KeyEntity>>
+
+    @Query("DELETE FROM api_keys WHERE `key` = :key")
+    suspend fun deleteKey(key: String)
 }
 
-@Database(entities = [ArchitectEntry::class], version = 1)
+@Database(entities = [ArchitectEntry::class, PersonaEntity::class, KeyEntity::class], version = 5)
 abstract class ArchitectDatabase : RoomDatabase() {
     abstract fun architectDao(): ArchitectDao
 
     companion object {
-        @Volatile
-        private var INSTANCE: ArchitectDatabase? = null
-
+        @Volatile private var INSTANCE: ArchitectDatabase? = null
         fun getDatabase(context: Context): ArchitectDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
                     context.applicationContext,
                     ArchitectDatabase::class.java,
                     "anai_architect_db"
-                ).build()
+                ).fallbackToDestructiveMigration().build()
                 INSTANCE = instance
                 instance
             }
