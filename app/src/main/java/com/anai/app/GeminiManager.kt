@@ -126,7 +126,10 @@ class GeminiManager(
                 response.text?.let { raw ->
                     updateLog(">> STREAM CAPTURED. PARSING...")
                     _uiLog.value += "\n\n$raw"
-                    if (raw.contains("###ARCHITECT_DRAFT###")) parseDraft(raw)
+                    if (raw.contains("###ARCHITECT_DRAFT###")) {
+                        parseDraft(raw)
+                        updateLog(">> BLUEPRINT DRAFT SYNCED.")
+                    }
                     success = true
                 }
             } catch (e: Exception) {
@@ -150,20 +153,22 @@ class GeminiManager(
         val draft = raw.substringAfter("###ARCHITECT_DRAFT###").substringBefore("###END###")
         val lines = draft.trim().lines()
         val caps = mutableListOf("", "", "")
-        var hts = lines.find { it.startsWith("HT:") }?.removePrefix("HT:")?.trim() ?: ""
+
+        // Find hashtags first to append to captions
+        val hts = lines.find { it.startsWith("HT:") }?.removePrefix("HT:")?.trim() ?: ""
 
         lines.forEach { line ->
+            val trimmed = line.trim()
             when {
-                line.startsWith("C1:") -> caps[0] = "${line.removePrefix("C1:").trim()}\n\n$hts"
-                line.startsWith("C2:") -> caps[1] = "${line.removePrefix("C2:").trim()}\n\n$hts"
-                line.startsWith("C3:") -> caps[2] = "${line.removePrefix("C3:").trim()}\n\n$hts"
+                trimmed.startsWith("C1:") -> caps[0] = "${trimmed.removePrefix("C1:").trim()}\n\n$hts"
+                trimmed.startsWith("C2:") -> caps[1] = "${trimmed.removePrefix("C2:").trim()}\n\n$hts"
+                trimmed.startsWith("C3:") -> caps[2] = "${trimmed.removePrefix("C3:").trim()}\n\n$hts"
+                trimmed.startsWith("OV:") -> _overlayText.value = trimmed.removePrefix("OV:").trim()
+                trimmed.startsWith("MU:") -> _musicTip.value = trimmed.removePrefix("MU:").trim()
+                trimmed.startsWith("TAGS:") -> _seoTags.value = trimmed.removePrefix("TAGS:").trim()
             }
         }
-
         _captionOptions.value = caps
-        _overlayText.value = lines.find { it.startsWith("OV:") }?.removePrefix("OV:")?.trim() ?: ""
-        _musicTip.value = lines.find { it.startsWith("MU:") }?.removePrefix("MU:")?.trim() ?: ""
-        _seoTags.value = lines.find { it.startsWith("TAGS:") }?.removePrefix("TAGS:")?.trim() ?: ""
     }
 
     private fun updateLog(msg: String) {
