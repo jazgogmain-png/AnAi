@@ -4,6 +4,7 @@ import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -26,6 +27,7 @@ import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -60,15 +62,32 @@ fun DashboardScreen(
 
     // --- OBSERVE PERSISTENT DATA FROM MANAGER ---
     val logs by geminiManager.uiLog.collectAsState()
+    val isProcessing by geminiManager.isProcessing.collectAsState()
     val captionOptions by geminiManager.captionOptions.collectAsState()
     val overlayText by geminiManager.overlayText.collectAsState()
     val musicTip by geminiManager.musicTip.collectAsState()
     val seoTags by geminiManager.seoTags.collectAsState()
+    val descPart by geminiManager.descPart.collectAsState()
 
     val videoUri = videoUriString?.let { Uri.parse(it) }
     val videoPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         uri?.let { videoUriString = it.toString(); mediaManager.loadVideo(it); geminiManager.clearLog() }
     }
+
+    // --- MASTER FOOTER (The "Algo Goblin" Bait) ---
+    val byteBudsFooter = """
+        
+Welcome to Byte Buds 🐾
+
+We create wholesome, feel-good videos of cute baby animals using AI — designed to bring smiles, comfort, and a little joy to your day 🤍
+
+All videos on this channel are 100% AI-generated for creative and entertainment purposes.
+No real animals are harmed, staged, or misrepresented.
+
+If you love cute, cozy, relaxing, and wholesome animal content — you're in the right place 🐶🐱🐰
+
+New uploads regularly ✨
+    """.trimIndent()
 
     LazyColumn(
         modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
@@ -76,27 +95,36 @@ fun DashboardScreen(
     ) {
         item { Spacer(Modifier.height(8.dp)) }
 
-        // 1. THE MATRIX (Now at the top)
+        // 1. THE MATRIX LOG
         item {
-            Surface(
-                color = Color.Black,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(100.dp)
-                    .border(1.dp, Color.Green.copy(alpha = 0.5f), MaterialTheme.shapes.small)
-            ) {
-                val scrollState = rememberScrollState()
-                // Auto-scroll to bottom of logs
-                LaunchedEffect(logs) {
-                    scrollState.animateScrollTo(scrollState.maxValue)
+            Column {
+                Surface(
+                    color = Color.Black,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(110.dp)
+                        .border(1.dp, Color.Green.copy(alpha = 0.5f), MaterialTheme.shapes.small)
+                ) {
+                    val scrollState = rememberScrollState()
+                    LaunchedEffect(logs) {
+                        scrollState.animateScrollTo(scrollState.maxValue)
+                    }
+                    Text(
+                        text = logs.substringBefore("###ARCHITECT_DRAFT###"),
+                        color = Color.Green,
+                        fontFamily = FontFamily.Monospace,
+                        fontSize = 10.sp,
+                        modifier = Modifier.padding(8.dp).verticalScroll(scrollState)
+                    )
                 }
-                Text(
-                    text = logs.substringBefore("###ARCHITECT_DRAFT###"),
-                    color = Color.Green,
-                    fontFamily = FontFamily.Monospace,
-                    fontSize = 10.sp,
-                    modifier = Modifier.padding(8.dp).verticalScroll(scrollState)
-                )
+
+                if (isProcessing) {
+                    LinearProgressIndicator(
+                        modifier = Modifier.fillMaxWidth().height(2.dp),
+                        color = Color.Green,
+                        trackColor = Color.Black
+                    )
+                }
             }
         }
 
@@ -163,6 +191,7 @@ fun DashboardScreen(
                 OutlinedTextField(
                     value = currentCap,
                     onValueChange = {},
+                    readOnly = true,
                     modifier = Modifier.fillMaxWidth().heightIn(min = 100.dp).pointerInput(Unit) {
                         detectTapGestures(onDoubleTap = {
                             if (currentCap.isNotBlank()) {
@@ -176,7 +205,74 @@ fun DashboardScreen(
             }
         }
 
-        // 5. METADATA & EXECUTE
+        // 5. MASTER DESCRIPTION STATION
+        if (descPart.isNotBlank()) {
+            item {
+                val fullDesc = "$descPart\n$byteBudsFooter"
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .border(1.dp, Color.Cyan.copy(alpha = 0.5f), MaterialTheme.shapes.medium)
+                        .padding(12.dp)
+                ) {
+                    Text("YouTube Master Description", style = MaterialTheme.typography.labelLarge, color = Color.Cyan)
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = fullDesc,
+                        onValueChange = {},
+                        readOnly = true,
+                        modifier = Modifier.fillMaxWidth().heightIn(min = 140.dp).pointerInput(Unit) {
+                            detectTapGestures(onDoubleTap = {
+                                clipboardManager.setText(AnnotatedString(fullDesc))
+                                Toast.makeText(context, "Full Description Copied!", Toast.LENGTH_SHORT).show()
+                            })
+                        },
+                        textStyle = MaterialTheme.typography.bodySmall
+                    )
+                }
+            }
+        }
+
+        // 6. ONE-TAP SEO TAG CLOUD
+        if (seoTags.isNotBlank()) {
+            item {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .border(1.dp, Color.Green.copy(alpha = 0.3f), MaterialTheme.shapes.medium)
+                        .padding(12.dp)
+                ) {
+                    Text("SEO TAG CLOUD (Tap to Copy)", style = MaterialTheme.typography.labelLarge, color = Color.Green, fontWeight = FontWeight.Bold)
+                    Spacer(Modifier.height(8.dp))
+                    FlowRow(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        seoTags.split(",").forEach { tag ->
+                            val cleanTag = tag.trim()
+                            if (cleanTag.isNotBlank()) {
+                                SuggestionChip(
+                                    onClick = {
+                                        clipboardManager.setText(AnnotatedString(cleanTag))
+                                        Toast.makeText(context, "Copied: $cleanTag", Toast.LENGTH_SHORT).show()
+                                    },
+                                    label = { Text(cleanTag, fontSize = 11.sp, fontFamily = FontFamily.Monospace) },
+                                    colors = SuggestionChipDefaults.suggestionChipColors(
+                                        containerColor = Color.Black,
+                                        labelColor = Color.Green
+                                    ),
+                                    // FIXED: Using foundation BorderStroke to avoid mismatch
+                                    border = BorderStroke(1.dp, Color.Green.copy(alpha = 0.5f))
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // 7. METADATA & EXECUTE
         item {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -185,12 +281,6 @@ fun DashboardScreen(
                     })
                     OutlinedTextField(value = musicTip, onValueChange = {}, label = { Text("Music") }, modifier = Modifier.weight(1f).pointerInput(Unit) {
                         detectTapGestures(onDoubleTap = { clipboardManager.setText(AnnotatedString(musicTip)); Toast.makeText(context, "Music Copied!", Toast.LENGTH_SHORT).show() })
-                    })
-                }
-
-                if (seoTags.isNotBlank()) {
-                    OutlinedTextField(value = seoTags, onValueChange = {}, label = { Text("SEO Tags") }, modifier = Modifier.fillMaxWidth().pointerInput(Unit) {
-                        detectTapGestures(onDoubleTap = { clipboardManager.setText(AnnotatedString(seoTags)); Toast.makeText(context, "Tags Copied!", Toast.LENGTH_SHORT).show() })
                     })
                 }
 
@@ -209,10 +299,11 @@ fun DashboardScreen(
                         }
                     },
                     modifier = Modifier.fillMaxWidth().height(56.dp),
-                    enabled = selectedEngine != null && selectedPersona != null && videoUriString != null,
+                    enabled = selectedEngine != null && selectedPersona != null && videoUriString != null && !isProcessing,
                     shape = MaterialTheme.shapes.medium
                 ) {
-                    Text("EXECUTE BLUEPRINT SCAN", fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
+                    if (isProcessing) CircularProgressIndicator(modifier = Modifier.size(24.dp), color = Color.Green, strokeWidth = 2.dp)
+                    else Text("EXECUTE BLUEPRINT SCAN", fontWeight = FontWeight.Bold)
                 }
             }
         }

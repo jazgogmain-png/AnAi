@@ -37,6 +37,9 @@ class GeminiManager(
     private val _seoTags = MutableStateFlow("")
     val seoTags = _seoTags.asStateFlow()
 
+    private val _descPart = MutableStateFlow("")
+    val descPart = _descPart.asStateFlow()
+
     private suspend fun getNextModel(): GenerativeModel {
         val savedKeys = dao.getAllKeys().first()
         if (savedKeys.isEmpty()) throw IllegalStateException("Vault Empty")
@@ -102,6 +105,7 @@ class GeminiManager(
         _overlayText.value = ""
         _musicTip.value = ""
         _seoTags.value = ""
+        _descPart.value = ""
         _isProcessing.value = false
     }
 
@@ -166,6 +170,7 @@ class GeminiManager(
                 trimmed.startsWith("OV:") -> _overlayText.value = trimmed.removePrefix("OV:").trim()
                 trimmed.startsWith("MU:") -> _musicTip.value = trimmed.removePrefix("MU:").trim()
                 trimmed.startsWith("TAGS:") -> _seoTags.value = trimmed.removePrefix("TAGS:").trim()
+                trimmed.startsWith("DESC:") -> _descPart.value = trimmed.removePrefix("DESC:").trim()
             }
         }
         _captionOptions.value = caps
