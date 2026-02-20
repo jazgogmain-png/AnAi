@@ -18,6 +18,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -30,58 +31,47 @@ fun PromptLabScreen(geminiManager: GeminiManager, mediaManager: MediaManager) {
     val clipboardManager = LocalClipboardManager.current
     val context = LocalContext.current
 
-    // UI State
     val isProcessing by geminiManager.isProcessing.collectAsState()
-    var activePrompt by remember { mutableStateOf("No DNA extracted yet. Load a video in the Studio first.") }
+    var activePrompt by remember { mutableStateOf("No DNA extracted. Load video in Studio first.") }
     val promptHistory = remember { mutableStateListOf<String>() }
 
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
-        Text(
-            text = "VEO PROMPT LAB",
-            style = MaterialTheme.typography.headlineSmall,
-            color = Color(0xFFBB86FC)
-        )
-        Text(
-            text = "Reverse-engineer visual DNA for AI Generation",
-            style = MaterialTheme.typography.labelSmall,
-            color = Color.Gray
-        )
+        Text("VEO PROMPT LAB", style = MaterialTheme.typography.headlineSmall, color = Color(0xFFBB86FC))
+        Text("Reverse-engineer visual DNA. Edit text to add a title!", fontSize = 11.sp, color = Color.Gray)
 
         Spacer(Modifier.height(16.dp))
 
-        // --- MAIN PROMPT VIEWER ---
+        // --- EDITABLE MAIN PROMPT VIEWER ---
         Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .weight(0.4f),
+            modifier = Modifier.fillMaxWidth().weight(0.4f),
             colors = CardDefaults.cardColors(containerColor = Color.Black),
             border = BorderStroke(1.dp, Color(0xFFBB86FC).copy(alpha = 0.5f))
         ) {
             Box(modifier = Modifier.fillMaxSize().padding(12.dp)) {
-                Column {
-                    Text("ACTIVE VISUAL DNA", style = MaterialTheme.typography.labelSmall, color = Color(0xFFBB86FC))
-                    Spacer(Modifier.height(8.dp))
-                    LazyColumn(modifier = Modifier.fillMaxSize()) {
-                        item {
-                            Text(
-                                text = activePrompt,
-                                color = Color.White,
-                                fontFamily = FontFamily.Monospace,
-                                fontSize = 13.sp
-                            )
-                        }
-                    }
-                }
+                // We use OutlinedTextField here so you can tap and type
+                OutlinedTextField(
+                    value = activePrompt,
+                    onValueChange = { activePrompt = it },
+                    modifier = Modifier.fillMaxSize(),
+                    textStyle = TextStyle(
+                        color = Color.White,
+                        fontFamily = FontFamily.Monospace,
+                        fontSize = 13.sp
+                    ),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = Color.Transparent,
+                        unfocusedBorderColor = Color.Transparent
+                    )
+                )
 
-                // Floating Copy Button (Using 'Add' icon as placeholder for Copy)
-                if (activePrompt.length > 30) {
+                if (activePrompt.length > 20) {
                     SmallFloatingActionButton(
                         onClick = {
                             clipboardManager.setText(AnnotatedString(activePrompt))
                             if (!promptHistory.contains(activePrompt)) {
                                 promptHistory.add(0, activePrompt)
                             }
-                            Toast.makeText(context, "DNA Copied!", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, "DNA & Title Archived!", Toast.LENGTH_SHORT).show()
                         },
                         modifier = Modifier.align(Alignment.BottomEnd).padding(8.dp),
                         containerColor = Color(0xFFBB86FC)
@@ -94,7 +84,6 @@ fun PromptLabScreen(geminiManager: GeminiManager, mediaManager: MediaManager) {
 
         Spacer(Modifier.height(16.dp))
 
-        // --- ACTION BUTTON ---
         Button(
             onClick = {
                 scope.launch {
@@ -102,7 +91,7 @@ fun PromptLabScreen(geminiManager: GeminiManager, mediaManager: MediaManager) {
                     if (videoUri != null) {
                         activePrompt = geminiManager.extractPrompt(videoUri)
                     } else {
-                        Toast.makeText(context, "Go to Studio and pick a video first!", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, "Studio video missing!", Toast.LENGTH_SHORT).show()
                     }
                 }
             },
@@ -110,10 +99,9 @@ fun PromptLabScreen(geminiManager: GeminiManager, mediaManager: MediaManager) {
             enabled = !isProcessing,
             colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFBB86FC))
         ) {
-            if (isProcessing) {
-                CircularProgressIndicator(modifier = Modifier.size(24.dp), color = Color.White)
-            } else {
-                Icon(Icons.Default.Build, null)
+            if (isProcessing) CircularProgressIndicator(modifier = Modifier.size(24.dp), color = Color.White)
+            else {
+                Icon(Icons.Default.Refresh, null)
                 Spacer(Modifier.width(8.dp))
                 Text("EXTRACT VEO DNA")
             }
@@ -121,26 +109,17 @@ fun PromptLabScreen(geminiManager: GeminiManager, mediaManager: MediaManager) {
 
         Spacer(Modifier.height(24.dp))
 
-        // --- HISTORY SECTION ---
         Text("RECALL HISTORY", style = MaterialTheme.typography.labelLarge)
         HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
 
-        LazyColumn(
-            modifier = Modifier.weight(0.6f),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
+        LazyColumn(modifier = Modifier.weight(0.6f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             items(promptHistory) { historyItem ->
                 ListItem(
                     modifier = Modifier
                         .border(1.dp, Color.Gray.copy(alpha = 0.3f), RoundedCornerShape(8.dp))
                         .clickable { activePrompt = historyItem },
                     headlineContent = {
-                        Text(
-                            text = historyItem,
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis,
-                            fontSize = 12.sp
-                        )
+                        Text(text = historyItem, maxLines = 2, overflow = TextOverflow.Ellipsis, fontSize = 12.sp)
                     },
                     trailingContent = {
                         IconButton(onClick = { promptHistory.remove(historyItem) }) {

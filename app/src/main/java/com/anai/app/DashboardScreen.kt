@@ -23,7 +23,6 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -45,24 +44,24 @@ fun DashboardScreen(
     val scope = rememberCoroutineScope()
     val clipboardManager = LocalClipboardManager.current
     val context = LocalContext.current
-
     var showPersonaSheet by remember { mutableStateOf(false) }
-    var showPromptLab by remember { mutableStateOf(false) }
-
-    // Prompt History State
-    val promptHistory = remember { mutableStateListOf<String>() }
-    var latestPrompt by remember { mutableStateOf("") }
 
     val personas by dao.getAllPersonas().collectAsState(initial = emptyList())
     val engines by dao.getAllEngines().collectAsState(initial = emptyList())
 
-    // --- UI STATE (Explicit Types) ---
     var videoUriString by rememberSaveable { mutableStateOf<String?>(null) }
     var selectedPersona by remember { mutableStateOf<PersonaEntity?>(null) }
     var selectedEngine by remember { mutableStateOf<EngineEntity?>(null) }
     var activeCaptionIndex by rememberSaveable { mutableIntStateOf(0) }
 
-    // --- OBSERVE DATA ---
+    LaunchedEffect(selectedPlatform, engines, personas) {
+        if (selectedPlatform != null) {
+            selectedEngine = engines.find { it.name.contains(selectedPlatform.name, ignoreCase = true) }
+                ?: engines.firstOrNull()
+            if (selectedPersona == null) selectedPersona = personas.firstOrNull()
+        }
+    }
+
     val isProcessing by geminiManager.isProcessing.collectAsState()
     val captionOptions by geminiManager.captionOptions.collectAsState()
     val overlayText by geminiManager.overlayText.collectAsState()
@@ -75,15 +74,6 @@ fun DashboardScreen(
         uri?.let { videoUriString = it.toString(); mediaManager.loadVideo(it); geminiManager.clearLog() }
     }
 
-    val byteBudsFooter = """
-        
-Welcome to Byte Buds 🐾
-We create wholesome, feel-good videos of cute baby animals using AI — designed to bring smiles, comfort, and a little joy to your day 🤍
-
-All videos on this channel are 100% AI-generated for creative and entertainment purposes.
-No real animals are harmed, staged, or misrepresented.
-    """.trimIndent()
-
     LazyColumn(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         item { ArchitectHeader(geminiManager, mediaManager, videoUriString) }
 
@@ -91,10 +81,6 @@ No real animals are harmed, staged, or misrepresented.
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 Text(text = if (selectedPlatform == null) "Master Studio" else "${selectedPlatform.name} Studio", style = MaterialTheme.typography.labelLarge, color = Color.Gray)
                 Row {
-                    // PROMPT LAB BUTTON (Swapped to Build icon for maximum compatibility)
-                    IconButton(onClick = { showPromptLab = true }) {
-                        Icon(Icons.Default.Build, "Prompt Lab", tint = Color(0xFFBB86FC))
-                    }
                     if (videoUriString == null) {
                         IconButton(onClick = { videoPicker.launch("video/*") }) {
                             Icon(Icons.Default.Add, null, tint = Color.Cyan)
@@ -107,29 +93,23 @@ No real animals are harmed, staged, or misrepresented.
             }
         }
 
-        // --- BLUEPRINT SELECTION ---
         item {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedCard(onClick = { showPersonaSheet = true }, modifier = Modifier.fillMaxWidth()) {
                     Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.Person, null, modifier = Modifier.size(16.dp))
+                        Icon(Icons.Default.Person, null, modifier = Modifier.size(16.dp), tint = Color.Cyan)
                         Spacer(Modifier.width(8.dp))
                         Text(selectedPersona?.name ?: "Select Soul", fontSize = 12.sp)
                     }
                 }
                 FlowRow(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     engines.forEach { engine ->
-                        FilterChip(
-                            selected = selectedEngine?.id == engine.id,
-                            onClick = { selectedEngine = engine },
-                            label = { Text(engine.name, fontSize = 10.sp) }
-                        )
+                        FilterChip(selected = selectedEngine?.id == engine.id, onClick = { selectedEngine = engine }, label = { Text(engine.name, fontSize = 10.sp) })
                     }
                 }
             }
         }
 
-        // --- DRAFT STATION ---
         item {
             Column(modifier = Modifier.fillMaxWidth().border(1.dp, MaterialTheme.colorScheme.outline, MaterialTheme.shapes.medium).padding(12.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -150,14 +130,12 @@ No real animals are harmed, staged, or misrepresented.
             }
         }
 
-        // --- DESCRIPTION & HASHTAGS ---
-        if ((selectedPlatform == null || (selectedPlatform.hasDescription)) && descPart.isNotBlank()) {
+        if (descPart.isNotBlank()) {
             item {
-                val fullDesc = if (selectedPlatform?.name?.contains("YouTube", ignoreCase = true) == true) "$descPart\n$byteBudsFooter" else descPart
                 Column(modifier = Modifier.fillMaxWidth().border(1.dp, Color.Cyan.copy(alpha = 0.5f), MaterialTheme.shapes.medium).padding(12.dp)) {
                     Text("Architect Description", style = MaterialTheme.typography.labelLarge, color = Color.Cyan)
-                    OutlinedTextField(value = fullDesc, onValueChange = {}, readOnly = true, modifier = Modifier.fillMaxWidth().heightIn(min = 100.dp).pointerInput(Unit) {
-                        detectTapGestures(onDoubleTap = { clipboardManager.setText(AnnotatedString(fullDesc)); Toast.makeText(context, "Copied!", Toast.LENGTH_SHORT).show() })
+                    OutlinedTextField(value = descPart, onValueChange = {}, readOnly = true, modifier = Modifier.fillMaxWidth().heightIn(min = 100.dp).pointerInput(Unit) {
+                        detectTapGestures(onDoubleTap = { clipboardManager.setText(AnnotatedString(descPart)); Toast.makeText(context, "Copied!", Toast.LENGTH_SHORT).show() })
                     })
                 }
             }
@@ -174,7 +152,6 @@ No real animals are harmed, staged, or misrepresented.
             }
         }
 
-        // --- EXECUTE ---
         item {
             Button(
                 onClick = {
@@ -190,44 +167,6 @@ No real animals are harmed, staged, or misrepresented.
             }
         }
         item { Spacer(Modifier.height(16.dp)) }
-    }
-
-    // --- PROMPT LAB SHEET ---
-    if (showPromptLab) {
-        ModalBottomSheet(onDismissRequest = { showPromptLab = false }) {
-            Column(modifier = Modifier.fillMaxWidth().padding(16.dp).padding(bottom = 32.dp)) {
-                Text("Prompt Lab", style = MaterialTheme.typography.headlineSmall, color = Color(0xFFBB86FC))
-                if (latestPrompt.isNotEmpty()) {
-                    Card(modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp), colors = CardDefaults.cardColors(containerColor = Color.Black)) {
-                        Column(modifier = Modifier.padding(12.dp)) {
-                            Text(latestPrompt, color = Color.White, fontSize = 12.sp)
-                            Button(onClick = {
-                                clipboardManager.setText(AnnotatedString(latestPrompt))
-                                promptHistory.add(0, latestPrompt)
-                                latestPrompt = ""
-                            }, modifier = Modifier.align(Alignment.End)) { Text("Copy & Archive") }
-                        }
-                    }
-                }
-                Button(onClick = { scope.launch { latestPrompt = geminiManager.extractPrompt(videoUriString) } }, modifier = Modifier.fillMaxWidth(), enabled = videoUriString != null && !isProcessing) {
-                    Text("Extract Veo DNA")
-                }
-                Spacer(Modifier.height(16.dp))
-                LazyColumn(modifier = Modifier.height(200.dp)) {
-                    items(promptHistory) { item ->
-                        ListItem(
-                            headlineContent = { Text(item, maxLines = 1, overflow = TextOverflow.Ellipsis) },
-                            trailingContent = {
-                                Row {
-                                    IconButton(onClick = { clipboardManager.setText(AnnotatedString(item)) }) { Icon(Icons.Default.Info, null) }
-                                    IconButton(onClick = { promptHistory.remove(item) }) { Icon(Icons.Default.Delete, null, tint = Color.Red) }
-                                }
-                            }
-                        )
-                    }
-                }
-            }
-        }
     }
 
     if (showPersonaSheet) {

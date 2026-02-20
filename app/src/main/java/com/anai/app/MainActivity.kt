@@ -69,7 +69,7 @@ fun MainAppScaffold(geminiManager: GeminiManager, mediaManager: MediaManager, da
 
                 HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
 
-                // NEW: PROMPT LAB IN SIDEBAR
+                // PROMPT LAB (VEO DNA EXTRACTION)
                 NavigationDrawerItem(
                     label = { Text("Prompt Lab (VEO)") },
                     selected = currentScreen == "PromptLab",
@@ -78,6 +78,7 @@ fun MainAppScaffold(geminiManager: GeminiManager, mediaManager: MediaManager, da
                     modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)
                 )
 
+                // THE STUDY (BRAINSTORMING)
                 NavigationDrawerItem(
                     label = { Text("The Study (Chat)") },
                     selected = currentScreen == "Chat",
@@ -87,6 +88,8 @@ fun MainAppScaffold(geminiManager: GeminiManager, mediaManager: MediaManager, da
                 )
 
                 Spacer(Modifier.weight(1f))
+
+                // BLUEPRINT FACTORY (WHERE THE FORGE LIVES)
                 NavigationDrawerItem(
                     label = { Text("Blueprint Factory") },
                     selected = currentScreen == "Blueprints",
@@ -94,6 +97,8 @@ fun MainAppScaffold(geminiManager: GeminiManager, mediaManager: MediaManager, da
                     onClick = { currentScreen = "Blueprints"; scope.launch { drawerState.close() } },
                     modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)
                 )
+
+                // KEY VAULT (ROTATION NODES)
                 NavigationDrawerItem(
                     label = { Text("Key Vault") },
                     selected = currentScreen == "Settings",
@@ -124,7 +129,8 @@ fun MainAppScaffold(geminiManager: GeminiManager, mediaManager: MediaManager, da
                     "Studio", "Architect" -> DashboardScreen(geminiManager, mediaManager, dao, selectedPlatform)
                     "PromptLab" -> PromptLabScreen(geminiManager, mediaManager)
                     "Chat" -> ChatScreen(geminiManager)
-                    "Blueprints" -> BlueprintsScreen(dao)
+                    // PASSING GEMINI MANAGER TO ENABLE THE FORGE
+                    "Blueprints" -> BlueprintsScreen(dao, geminiManager)
                     "Settings" -> SettingsScreen(dao)
                 }
             }

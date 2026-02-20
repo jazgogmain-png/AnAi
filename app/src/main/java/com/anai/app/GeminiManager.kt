@@ -50,73 +50,65 @@ class GeminiManager(
         )
     }
 
-    suspend fun analyzeVideo(
-        contextInfo: String,
-        platform: String,
-        personaName: String?,
-        personaInstructions: String?,
-        videoUriString: String?,
-        engineInstructions: String?,
-        engineTemplate: String?
-    ) {
-        if (videoUriString == null) return
-        val videoUri = Uri.parse(videoUriString)
+    // PERSONA FORGE
+    suspend fun forgePersona(description: String): String {
         _isProcessing.value = true
-
-        val videoBytes = withContext(Dispatchers.IO) {
-            updateLog(">> EXTRACTING PIXELS FOR $platform...")
-            context.contentResolver.openInputStream(videoUri)?.use { it.readBytes() }
-        }
-
-        runWithRotation { model ->
-            model.generateContent(content {
-                videoBytes?.let { blob("video/mp4", it) }
-                text("""
-                    SOUL (VOICE): $personaInstructions
-                    ENGINE (STRUCTURE): $engineInstructions
-                    PLATFORM: $platform
-                    CONTEXT: $contextInfo
-                    FORMAT: $engineTemplate
-                """.trimIndent())
-            })
-        }
-        _isProcessing.value = false
-    }
-
-    // NEW: PROMPT LAB EXTRACTION (VEO ENGINE)
-    suspend fun extractPrompt(videoUriString: String?): String {
-        if (videoUriString == null) return "No Video Loaded"
-        val videoUri = Uri.parse(videoUriString)
-        _isProcessing.value = true
-        updateLog(">> EXTRACTING VISUAL DNA...")
-
-        val videoBytes = withContext(Dispatchers.IO) {
-            context.contentResolver.openInputStream(videoUri)?.use { it.readBytes() }
-        }
-
         var result = ""
         runWithRotation { model ->
-            val response = model.generateContent(content {
-                videoBytes?.let { blob("video/mp4", it) }
-                text("""
-                    [TASK]: Reverse-engineer this video into a high-fidelity AI video prompt for Google Veo.
-                    [FOCUS]: Lighting, camera movement, lens type, color grading, and textures.
-                    [FORMAT]: Output ONLY the prompt. No intro or outro.
-                """.trimIndent())
-            })
-            result = response.text ?: "Extraction Failed"
+            val response = model.generateContent("Act as a prompt engineer. Turn this into a high-performance persona instructional sheet: $description")
+            result = response.text ?: "Forge Failed"
             response
         }
         _isProcessing.value = false
         return result
     }
 
-    // NEW: THE STUDY CHAT SYSTEM
+    suspend fun analyzeVideo(contextInfo: String, platform: String, personaName: String?, personaInstructions: String?, videoUriString: String?, engineInstructions: String?, engineTemplate: String?) {
+        if (videoUriString == null) return
+        val videoUri = Uri.parse(videoUriString)
+        _isProcessing.value = true
+        val videoBytes = withContext(Dispatchers.IO) {
+            context.contentResolver.openInputStream(videoUri)?.use { it.readBytes() }
+        }
+        runWithRotation { model ->
+            model.generateContent(content {
+                videoBytes?.let { blob("video/mp4", it) }
+                text("SOUL: $personaInstructions\nENGINE: $engineInstructions\nPLATFORM: $platform\nCONTEXT: $contextInfo\nFORMAT: $engineTemplate")
+            })
+        }
+        _isProcessing.value = false
+    }
+
+    suspend fun extractPrompt(videoUriString: String?): String {
+        if (videoUriString == null) return "No Video"
+        _isProcessing.value = true
+        val videoUri = Uri.parse(videoUriString)
+        val videoBytes = withContext(Dispatchers.IO) { context.contentResolver.openInputStream(videoUri)?.use { it.readBytes() } }
+        var result = ""
+        runWithRotation { model ->
+            val response = model.generateContent(content {
+                videoBytes?.let { blob("video/mp4", it) }
+                text("[TASK]: Reverse-engineer this video into a high-fidelity Veo prompt.")
+            })
+            result = response.text ?: ""
+            response
+        }
+        _isProcessing.value = false
+        return result
+    }
+
+    // FIXED: THE STUDY CHAT (Now actually logs the response!)
     suspend fun chat(message: String) {
         _isProcessing.value = true
-        updateLog(">> STUDY QUERY: $message")
+        // Log the user's message first
+        updateLog("\n[USER]: $message")
+
         runWithRotation { model ->
-            model.generateContent(message)
+            val response = model.generateContent(message)
+            response.text?.let {
+                updateLog("\n[ARCHITECT]: $it")
+            }
+            response
         }
         _isProcessing.value = false
     }
@@ -129,13 +121,16 @@ class GeminiManager(
             try {
                 val response = withContext(Dispatchers.IO) { block(getNextModel()) }
                 response.text?.let { raw ->
-                    _uiLog.value += "\n\n$raw"
-                    if (raw.contains("###ARCHITECT_DRAFT###")) parseDraft(raw)
+                    // For Studio scans, we still show the raw output in the log
+                    if (raw.contains("###ARCHITECT_DRAFT###")) {
+                        _uiLog.value += "\n\n$raw"
+                        parseDraft(raw)
+                    }
                     success = true
                 }
             } catch (e: Exception) {
                 attempt++
-                updateLog(">> ROTATING NODE (Attempt $attempt)...")
+                updateLog(">> ROTATING NODE...")
                 delay(800)
             }
         }
@@ -145,18 +140,17 @@ class GeminiManager(
         val draft = raw.substringAfter("###ARCHITECT_DRAFT###").substringBefore("###END###")
         val lines = draft.trim().lines()
         val caps = mutableListOf("", "", "")
-
         lines.forEach { line ->
-            val trimmed = line.trim()
+            val t = line.trim()
             when {
-                trimmed.startsWith("C1:") -> caps[0] = trimmed.removePrefix("C1:").trim()
-                trimmed.startsWith("C2:") -> caps[1] = trimmed.removePrefix("C2:").trim()
-                trimmed.startsWith("C3:") -> caps[2] = trimmed.removePrefix("C3:").trim()
-                trimmed.startsWith("OV:") -> _overlayText.value = trimmed.removePrefix("OV:").trim()
-                trimmed.startsWith("MU:") -> _musicTip.value = trimmed.removePrefix("MU:").trim()
-                trimmed.startsWith("TAGS:") -> _seoTags.value = trimmed.removePrefix("TAGS:").trim()
-                trimmed.startsWith("DESC:") -> _descPart.value = trimmed.removePrefix("DESC:").trim()
-                trimmed.startsWith("HT:") -> _hashtagPart.value = trimmed.removePrefix("HT:").trim()
+                t.startsWith("C1:") -> caps[0] = t.removePrefix("C1:").trim()
+                t.startsWith("C2:") -> caps[1] = t.removePrefix("C2:").trim()
+                t.startsWith("C3:") -> caps[2] = t.removePrefix("C3:").trim()
+                t.startsWith("OV:") -> _overlayText.value = t.removePrefix("OV:").trim()
+                t.startsWith("MU:") -> _musicTip.value = t.removePrefix("MU:").trim()
+                t.startsWith("TAGS:") -> _seoTags.value = t.removePrefix("TAGS:").trim()
+                t.startsWith("DESC:") -> _descPart.value = t.removePrefix("DESC:").trim()
+                t.startsWith("HT:") -> _hashtagPart.value = t.removePrefix("HT:").trim()
             }
         }
         _captionOptions.value = caps
@@ -168,5 +162,7 @@ class GeminiManager(
         _musicTip.value = ""; _seoTags.value = ""; _descPart.value = ""; _hashtagPart.value = ""
     }
 
-    private fun updateLog(msg: String) { _uiLog.value += "\n$msg" }
+    private fun updateLog(msg: String) {
+        _uiLog.value += msg
+    }
 }
