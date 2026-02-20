@@ -7,16 +7,15 @@ import androidx.room.RoomDatabase
 
 @Database(
     entities = [
-        ArchitectEntry::class,
-        PersonaEntity::class,
         KeyEntity::class,
-        EngineEntity::class // <--- MAKE SURE THIS IS HERE
+        PersonaEntity::class,
+        EngineEntity::class,
+        PlatformEntity::class
     ],
-    version = 6, // <--- INCREMENT THIS (from 5 to 6)
+    version = 2,
     exportSchema = false
 )
 abstract class ArchitectDatabase : RoomDatabase() {
-
     abstract fun architectDao(): ArchitectDao
 
     companion object {
@@ -28,9 +27,9 @@ abstract class ArchitectDatabase : RoomDatabase() {
                 val instance = Room.databaseBuilder(
                     context.applicationContext,
                     ArchitectDatabase::class.java,
-                    "anai_architect_db"
+                    "architect_database"
                 )
-                    .fallbackToDestructiveMigration() // Wipes DB to avoid migration errors
+                    .fallbackToDestructiveMigration()
                     .build()
                 INSTANCE = instance
                 instance

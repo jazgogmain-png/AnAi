@@ -11,6 +11,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.anai.app.database.ArchitectDatabase
+import com.anai.app.database.PlatformEntity
 import kotlinx.coroutines.launch
 
 // Navigation & UI Imports
@@ -23,17 +24,14 @@ import androidx.compose.material3.NavigationDrawerItemDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.CenterAlignedTopAppBar
-import androidx.compose.runtime.rememberCoroutineScope
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // 1. Initialize Database
+        // 1. Initialize Database & Managers
         val database = ArchitectDatabase.getDatabase(this)
         val dao = database.architectDao()
-
-        // 2. Initialize Managers OUTSIDE of Composable to prevent re-init crashes
         val mediaManager = MediaManager(this)
         val geminiManager = GeminiManager(this, mediaManager, dao)
 
@@ -56,8 +54,12 @@ fun MainAppScaffold(
     val scope = rememberCoroutineScope()
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
 
+    // Observe Platforms from DB
+    val dbPlatforms by dao.getAllPlatforms().collectAsState(initial = emptyList())
+
     // NAVIGATION STATE
     var currentScreen by remember { mutableStateOf("Architect") }
+    var selectedPlatform by remember { mutableStateOf<PlatformEntity?>(null) }
 
     ModalNavigationDrawer(
         drawerState = drawerState,
@@ -67,35 +69,69 @@ fun MainAppScaffold(
                 Text("ANAI ARCHITECT", modifier = Modifier.padding(16.dp), style = MaterialTheme.typography.headlineSmall)
                 HorizontalDivider()
 
-                // NAVIGATION ITEMS
+                Spacer(Modifier.height(8.dp))
+
+                // 1. MASTER STUDIO (The Landing Page)
                 NavigationDrawerItem(
-                    label = { Text("Video Architect") },
+                    label = { Text("Master Studio") },
                     selected = currentScreen == "Architect",
-                    icon = { Icon(Icons.Default.Build, null) },
-                    onClick = { currentScreen = "Architect"; scope.launch { drawerState.close() } },
+                    icon = { Icon(Icons.Default.Home, null) },
+                    onClick = {
+                        selectedPlatform = null
+                        currentScreen = "Architect"
+                        scope.launch { drawerState.close() }
+                    },
                     modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)
                 )
+
+                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+
+                // 2. DYNAMIC PLATFORMS (Manufactured in Blueprint Factory)
+                if (dbPlatforms.isNotEmpty()) {
+                    Text("DEDICATED STUDIOS", style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(start = 16.dp, top = 8.dp, bottom = 4.dp))
+                }
+
+                dbPlatforms.forEach { platform ->
+                    NavigationDrawerItem(
+                        label = { Text("${platform.name} Studio") },
+                        selected = selectedPlatform?.id == platform.id && currentScreen == "Studio",
+                        icon = { Icon(Icons.Default.PlayArrow, null) }, // Swapped from Movie to PlayArrow
+                        onClick = {
+                            selectedPlatform = platform
+                            currentScreen = "Studio"
+                            scope.launch { drawerState.close() }
+                        },
+                        modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)
+                    )
+                }
+
+                Spacer(Modifier.weight(1f)) // Push system items to bottom
+                HorizontalDivider()
+
+                // 3. SYSTEM TOOLS
                 NavigationDrawerItem(
-                    label = { Text("Blueprint Factory") }, // Renamed for modularity
+                    label = { Text("Blueprint Factory") },
                     selected = currentScreen == "Blueprints",
-                    icon = { Icon(Icons.Default.List, null) },
-                    onClick = { currentScreen = "Blueprints"; scope.launch { drawerState.close() } },
-                    modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)
-                )
-                NavigationDrawerItem(
-                    label = { Text("The Study (Chat)") },
-                    selected = currentScreen == "Chat",
-                    icon = { Icon(Icons.Default.Send, null) },
-                    onClick = { currentScreen = "Chat"; scope.launch { drawerState.close() } },
+                    icon = { Icon(Icons.Default.Build, null) },
+                    onClick = {
+                        selectedPlatform = null
+                        currentScreen = "Blueprints"
+                        scope.launch { drawerState.close() }
+                    },
                     modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)
                 )
                 NavigationDrawerItem(
                     label = { Text("Key Vault") },
                     selected = currentScreen == "Settings",
                     icon = { Icon(Icons.Default.Lock, null) },
-                    onClick = { currentScreen = "Settings"; scope.launch { drawerState.close() } },
+                    onClick = {
+                        selectedPlatform = null
+                        currentScreen = "Settings"
+                        scope.launch { drawerState.close() }
+                    },
                     modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)
                 )
+                Spacer(Modifier.height(12.dp))
             }
         }
     ) {
@@ -103,10 +139,11 @@ fun MainAppScaffold(
             topBar = {
                 AppTopBar(
                     title = when(currentScreen) {
-                        "Architect" -> "Video Architect"
+                        "Architect" -> "Master Studio"
+                        "Studio" -> "${selectedPlatform?.name} Studio"
                         "Blueprints" -> "Blueprint Factory"
-                        "Chat" -> "The Study"
-                        else -> "Key Vault"
+                        "Settings" -> "Key Vault"
+                        else -> "Video Architect"
                     },
                     onMenuClick = { scope.launch { drawerState.open() } }
                 )
@@ -114,9 +151,10 @@ fun MainAppScaffold(
         ) { padding ->
             Box(modifier = Modifier.padding(padding)) {
                 when (currentScreen) {
-                    "Architect" -> DashboardScreen(geminiManager, mediaManager, dao)
+                    "Studio", "Architect" -> {
+                        DashboardScreen(geminiManager, mediaManager, dao, selectedPlatform)
+                    }
                     "Blueprints" -> BlueprintsScreen(dao)
-                    "Chat" -> ChatScreen(geminiManager)
                     "Settings" -> SettingsScreen(dao)
                 }
             }

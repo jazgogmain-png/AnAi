@@ -1,183 +1,128 @@
 package com.anai.app
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.anai.app.database.ArchitectDao
 import com.anai.app.database.EngineEntity
 import com.anai.app.database.PersonaEntity
+import com.anai.app.database.PlatformEntity
 import kotlinx.coroutines.launch
 
 @Composable
 fun BlueprintsScreen(dao: ArchitectDao) {
     val scope = rememberCoroutineScope()
 
-    // UI State for Tabs
-    var activeTab by remember { mutableIntStateOf(0) } // 0: Persona, 1: Engine
+    // States for Persona
+    var personaName by remember { mutableStateOf("") }
+    var personaInstructions by remember { mutableStateOf("") }
 
-    // Shared Editor State
-    var selectedId by remember { mutableIntStateOf(0) }
-    var nameInput by remember { mutableStateOf("") }
-    var instrInput by remember { mutableStateOf("") }
-    var templateInput by remember { mutableStateOf("") }
+    // States for Engine
+    var engineName by remember { mutableStateOf("") }
+    var engineInstructions by remember { mutableStateOf("") }
+    var engineTemplate by remember { mutableStateOf("") }
 
-    // Database Flows
+    // States for Platform
+    var platformName by remember { mutableStateOf("") }
+    var hasDescription by remember { mutableStateOf(false) }
+    var hasTags by remember { mutableStateOf(false) }
+
     val personas by dao.getAllPersonas().collectAsState(initial = emptyList())
-    val engines by dao.getAllEngines().collectAsState(initial = emptyByList())
+    val engines by dao.getAllEngines().collectAsState(initial = emptyList())
+    val platforms by dao.getAllPlatforms().collectAsState(initial = emptyList())
 
-    LazyColumn(
-        modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
+    LazyColumn(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+        // --- SECTION: PLATFORMS ---
         item {
-            Spacer(modifier = Modifier.height(16.dp))
-            Text("Blueprint Factory", style = MaterialTheme.typography.headlineSmall)
-
-            TabRow(selectedTabIndex = activeTab, modifier = Modifier.padding(vertical = 8.dp)) {
-                Tab(selected = activeTab == 0, onClick = {
-                    activeTab = 0
-                    selectedId = 0; nameInput = ""; instrInput = ""; templateInput = ""
-                }) {
-                    Text("Soul (Personas)", modifier = Modifier.padding(8.dp))
-                }
-                Tab(selected = activeTab == 1, onClick = {
-                    activeTab = 1
-                    selectedId = 0; nameInput = ""; instrInput = ""; templateInput = ""
-                }) {
-                    Text("Script (Engines)", modifier = Modifier.padding(8.dp))
-                }
+            Text("Manufacture Platform", style = MaterialTheme.typography.headlineSmall)
+            OutlinedTextField(value = platformName, onValueChange = { platformName = it }, label = { Text("Platform Name (YouTube, TikTok...)") }, modifier = Modifier.fillMaxWidth())
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Row { Checkbox(checked = hasDescription, onCheckedChange = { hasDescription = it }); Text("Has Description") }
+                Row { Checkbox(checked = hasTags, onCheckedChange = { hasTags = it }); Text("Has Tags") }
             }
+            Button(onClick = {
+                scope.launch {
+                    dao.insertPlatform(PlatformEntity(name = platformName, hasDescription = hasDescription, hasTags = hasTags))
+                    platformName = ""
+                }
+            }) { Text("Save Platform") }
+            Spacer(Modifier.height(16.dp))
         }
 
-        // --- DYNAMIC EDITOR SECTION ---
+        items(platforms) { platform ->
+            ListItem(
+                headlineContent = { Text(platform.name) },
+                supportingContent = { Text("Desc: ${platform.hasDescription} | Tags: ${platform.hasTags}") },
+                trailingContent = {
+                    IconButton(onClick = { scope.launch { dao.deletePlatform(platform) } }) {
+                        Icon(Icons.Default.Delete, contentDescription = "Delete")
+                    }
+                }
+            )
+        }
+
+        item { HorizontalDivider(Modifier.padding(vertical = 16.dp)) }
+
+        // --- SECTION: PERSONAS ---
         item {
-            OutlinedCard(modifier = Modifier.fillMaxWidth()) {
-                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(
-                        text = if (selectedId == 0) "Create New" else "Editing: $nameInput",
-                        style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.primary
-                    )
+            Text("Manufacture Soul (Persona)", style = MaterialTheme.typography.headlineSmall)
+            OutlinedTextField(value = personaName, onValueChange = { personaName = it }, label = { Text("Name") }, modifier = Modifier.fillMaxWidth())
+            OutlinedTextField(value = personaInstructions, onValueChange = { personaInstructions = it }, label = { Text("Instructions") }, modifier = Modifier.fillMaxWidth())
+            Button(onClick = {
+                scope.launch {
+                    dao.insertPersona(PersonaEntity(name = personaName, instructions = personaInstructions))
+                    personaName = ""
+                    personaInstructions = ""
+                }
+            }) { Text("Save Soul") }
+            Spacer(Modifier.height(16.dp))
+        }
 
-                    OutlinedTextField(
-                        value = nameInput,
-                        onValueChange = { nameInput = it },
-                        label = { Text("Blueprint Name") },
-                        modifier = Modifier.fillMaxWidth()
-                    )
-
-                    OutlinedTextField(
-                        value = instrInput,
-                        onValueChange = { instrInput = it },
-                        label = { Text("System Instructions") },
-                        modifier = Modifier.fillMaxWidth().height(120.dp)
-                    )
-
-                    if (activeTab == 1) {
-                        OutlinedTextField(
-                            value = templateInput,
-                            onValueChange = { templateInput = it },
-                            label = { Text("Draft Template (HT: MU: OV: etc.)") },
-                            modifier = Modifier.fillMaxWidth().height(100.dp)
-                        )
-                    }
-
-                    Button(
-                        onClick = {
-                            if (nameInput.isNotBlank()) {
-                                scope.launch {
-                                    if (activeTab == 0) {
-                                        dao.savePersona(PersonaEntity(id = selectedId, name = nameInput, instructions = instrInput))
-                                    } else {
-                                        dao.saveEngine(EngineEntity(id = selectedId, name = nameInput, instructions = instrInput, draftTemplate = templateInput))
-                                    }
-                                    // Reset after save
-                                    selectedId = 0; nameInput = ""; instrInput = ""; templateInput = ""
-                                }
-                            }
-                        },
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Icon(if (selectedId == 0) Icons.Default.Add else Icons.Default.Edit, null)
-                        Spacer(Modifier.width(8.dp))
-                        Text(if (selectedId == 0) "MANUFACTURE BLUEPRINT" else "UPDATE BLUEPRINT")
-                    }
-
-                    if (selectedId != 0) {
-                        TextButton(onClick = { selectedId = 0; nameInput = ""; instrInput = ""; templateInput = "" }) {
-                            Text("Cancel Editing", color = MaterialTheme.colorScheme.error)
-                        }
+        items(personas) { persona ->
+            ListItem(
+                headlineContent = { Text(persona.name) },
+                trailingContent = {
+                    IconButton(onClick = { scope.launch { dao.deletePersona(persona) } }) {
+                        Icon(Icons.Default.Delete, contentDescription = "Delete")
                     }
                 }
-            }
+            )
         }
 
-        item { HorizontalDivider(); Text("Stored Blueprints", style = MaterialTheme.typography.labelLarge) }
+        item { HorizontalDivider(Modifier.padding(vertical = 16.dp)) }
 
-        // --- LIST SECTION ---
-        if (activeTab == 0) {
-            items(personas) { persona ->
-                BlueprintItem(
-                    name = persona.name,
-                    desc = persona.instructions,
-                    onEdit = {
-                        selectedId = persona.id
-                        nameInput = persona.name
-                        instrInput = persona.instructions
-                    },
-                    onDelete = { scope.launch { dao.deletePersona(persona) } }
-                )
-            }
-        } else {
-            items(engines) { engine ->
-                BlueprintItem(
-                    name = engine.name,
-                    desc = engine.instructions,
-                    onEdit = {
-                        selectedId = engine.id
-                        nameInput = engine.name
-                        instrInput = engine.instructions
-                        templateInput = engine.draftTemplate
-                    },
-                    onDelete = { scope.launch { dao.deleteEngine(engine) } }
-                )
-            }
+        // --- SECTION: ENGINES ---
+        item {
+            Text("Manufacture Script (Engine)", style = MaterialTheme.typography.headlineSmall)
+            OutlinedTextField(value = engineName, onValueChange = { engineName = it }, label = { Text("Engine Name") }, modifier = Modifier.fillMaxWidth())
+            OutlinedTextField(value = engineInstructions, onValueChange = { engineInstructions = it }, label = { Text("Instructions") }, modifier = Modifier.fillMaxWidth())
+            OutlinedTextField(value = engineTemplate, onValueChange = { engineTemplate = it }, label = { Text("Draft Template") }, modifier = Modifier.fillMaxWidth())
+            Button(onClick = {
+                scope.launch {
+                    dao.insertEngine(EngineEntity(name = engineName, instructions = engineInstructions, draftTemplate = engineTemplate))
+                    engineName = ""
+                    engineInstructions = ""
+                    engineTemplate = ""
+                }
+            }) { Text("Save Engine") }
+            Spacer(Modifier.height(16.dp))
         }
 
-        item { Spacer(modifier = Modifier.height(32.dp)) }
-    }
-}
-
-@Composable
-fun BlueprintItem(name: String, desc: String, onEdit: () -> Unit, onDelete: () -> Unit) {
-    Card(
-        modifier = Modifier.fillMaxWidth().clickable { onEdit() },
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
-    ) {
-        Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(name, style = MaterialTheme.typography.titleSmall)
-                Text(desc, style = MaterialTheme.typography.bodySmall, maxLines = 2, fontSize = 11.sp)
-            }
-            IconButton(onClick = onDelete) {
-                Icon(Icons.Default.Delete, null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(20.dp))
-            }
+        items(engines) { engine ->
+            ListItem(
+                headlineContent = { Text(engine.name) },
+                trailingContent = {
+                    IconButton(onClick = { scope.launch { dao.deleteEngine(engine) } }) {
+                        Icon(Icons.Default.Delete, contentDescription = "Delete")
+                    }
+                }
+            )
         }
     }
 }
-
-// Helper to handle empty state in collectAsState
-private fun <T> emptyByList() = emptyList<T>()
