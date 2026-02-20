@@ -24,7 +24,6 @@ class GeminiManager(
     private val _isProcessing = MutableStateFlow(false)
     val isProcessing = _isProcessing.asStateFlow()
 
-    // UI Output States
     private val _captionOptions = MutableStateFlow(listOf("", "", ""))
     val captionOptions = _captionOptions.asStateFlow()
     private val _overlayText = MutableStateFlow("")
@@ -50,33 +49,50 @@ class GeminiManager(
         )
     }
 
-    // PERSONA FORGE
+    suspend fun analyzeVideo(
+        contextInfo: String,
+        platform: String,
+        personaName: String?,
+        personaInstructions: String?,
+        videoUriString: String?,
+        engineInstructions: String?,
+        engineTemplate: String?
+    ) {
+        if (videoUriString == null) return
+        val videoUri = Uri.parse(videoUriString)
+        _isProcessing.value = true
+
+        val videoBytes = withContext(Dispatchers.IO) {
+            updateLog(">> CRUSHING PIXELS FOR $platform...")
+            context.contentResolver.openInputStream(videoUri)?.use { it.readBytes() }
+        }
+
+        runWithRotation { model ->
+            model.generateContent(content {
+                videoBytes?.let { blob("video/mp4", it) }
+                text("""
+                    [SOUL]: $personaInstructions
+                    [ENGINE]: $engineInstructions
+                    [PLATFORM]: $platform
+                    [VIRAL BLACKLIST]: viral, fyp, foryou, trending, explore, shorts.
+                    [HASHTAG FORMULA]: 2 niche + 2 format + 1 context.
+                    [FORMAT]: $engineTemplate
+                """.trimIndent())
+            })
+        }
+        _isProcessing.value = false
+    }
+
     suspend fun forgePersona(description: String): String {
         _isProcessing.value = true
         var result = ""
         runWithRotation { model ->
-            val response = model.generateContent("Act as a prompt engineer. Turn this into a high-performance persona instructional sheet: $description")
+            val response = model.generateContent("Turn this into a structured soul DNA sheet for an AI content system: $description")
             result = response.text ?: "Forge Failed"
             response
         }
         _isProcessing.value = false
         return result
-    }
-
-    suspend fun analyzeVideo(contextInfo: String, platform: String, personaName: String?, personaInstructions: String?, videoUriString: String?, engineInstructions: String?, engineTemplate: String?) {
-        if (videoUriString == null) return
-        val videoUri = Uri.parse(videoUriString)
-        _isProcessing.value = true
-        val videoBytes = withContext(Dispatchers.IO) {
-            context.contentResolver.openInputStream(videoUri)?.use { it.readBytes() }
-        }
-        runWithRotation { model ->
-            model.generateContent(content {
-                videoBytes?.let { blob("video/mp4", it) }
-                text("SOUL: $personaInstructions\nENGINE: $engineInstructions\nPLATFORM: $platform\nCONTEXT: $contextInfo\nFORMAT: $engineTemplate")
-            })
-        }
-        _isProcessing.value = false
     }
 
     suspend fun extractPrompt(videoUriString: String?): String {
@@ -97,17 +113,12 @@ class GeminiManager(
         return result
     }
 
-    // FIXED: THE STUDY CHAT (Now actually logs the response!)
     suspend fun chat(message: String) {
         _isProcessing.value = true
-        // Log the user's message first
         updateLog("\n[USER]: $message")
-
         runWithRotation { model ->
             val response = model.generateContent(message)
-            response.text?.let {
-                updateLog("\n[ARCHITECT]: $it")
-            }
+            response.text?.let { updateLog("\n[ARCHITECT]: $it") }
             response
         }
         _isProcessing.value = false
@@ -121,7 +132,6 @@ class GeminiManager(
             try {
                 val response = withContext(Dispatchers.IO) { block(getNextModel()) }
                 response.text?.let { raw ->
-                    // For Studio scans, we still show the raw output in the log
                     if (raw.contains("###ARCHITECT_DRAFT###")) {
                         _uiLog.value += "\n\n$raw"
                         parseDraft(raw)
@@ -130,7 +140,7 @@ class GeminiManager(
                 }
             } catch (e: Exception) {
                 attempt++
-                updateLog(">> ROTATING NODE...")
+                updateLog(">> ROTATING...")
                 delay(800)
             }
         }
@@ -162,7 +172,5 @@ class GeminiManager(
         _musicTip.value = ""; _seoTags.value = ""; _descPart.value = ""; _hashtagPart.value = ""
     }
 
-    private fun updateLog(msg: String) {
-        _uiLog.value += msg
-    }
+    private fun updateLog(msg: String) { _uiLog.value += msg }
 }

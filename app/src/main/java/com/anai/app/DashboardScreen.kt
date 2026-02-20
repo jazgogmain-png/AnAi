@@ -49,6 +49,7 @@ fun DashboardScreen(
     val personas by dao.getAllPersonas().collectAsState(initial = emptyList())
     val engines by dao.getAllEngines().collectAsState(initial = emptyList())
 
+    // --- UI STATE ---
     var videoUriString by rememberSaveable { mutableStateOf<String?>(null) }
     var selectedPersona by remember { mutableStateOf<PersonaEntity?>(null) }
     var selectedEngine by remember { mutableStateOf<EngineEntity?>(null) }
@@ -130,6 +131,7 @@ fun DashboardScreen(
             }
         }
 
+        // --- DUMB DESCRIPTION BOX (Strictly what G3 sends) ---
         if (descPart.isNotBlank()) {
             item {
                 Column(modifier = Modifier.fillMaxWidth().border(1.dp, Color.Cyan.copy(alpha = 0.5f), MaterialTheme.shapes.medium).padding(12.dp)) {

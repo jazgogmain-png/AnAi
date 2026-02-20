@@ -7,10 +7,8 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
@@ -32,109 +30,98 @@ fun BlueprintsScreen(dao: ArchitectDao, geminiManager: GeminiManager) {
     var personaName by remember { mutableStateOf("") }
     var personaInstructions by remember { mutableStateOf("") }
 
+    // Engine Edit State
+    var engineId by remember { mutableIntStateOf(0) }
+    var engineName by remember { mutableStateOf("") }
+    var engineInstructions by remember { mutableStateOf("") }
+    var engineTemplate by remember { mutableStateOf("") }
+
     val personas by dao.getAllPersonas().collectAsState(initial = emptyList())
+    val engines by dao.getAllEngines().collectAsState(initial = emptyList())
 
     LazyColumn(modifier = Modifier.fillMaxSize().padding(16.dp)) {
 
-        // --- 🧪 THE PERSONA FORGE (The Soul Lab) ---
+        // --- 🧪 THE PERSONA FORGE ---
         item {
             Text("PERSONA FORGE", style = MaterialTheme.typography.headlineSmall, color = Color.Yellow)
-            Text("Describe a vibe, and let G3 build the soul DNA.", fontSize = 11.sp, color = Color.Gray)
-
             OutlinedTextField(
                 value = forgeInput,
                 onValueChange = { forgeInput = it },
                 label = { Text("Describe the Soul") },
-                modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
-                placeholder = { Text("e.g. A wholesome animal lover who uses emojis...") }
+                modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)
             )
-
             Button(
-                onClick = {
-                    scope.launch {
-                        forgeResult = geminiManager.forgePersona(forgeInput)
-                    }
-                },
+                onClick = { scope.launch { forgeResult = geminiManager.forgePersona(forgeInput) } },
                 modifier = Modifier.fillMaxWidth(),
                 enabled = forgeInput.isNotBlank() && !isProcessing
             ) {
-                if (isProcessing) {
-                    CircularProgressIndicator(modifier = Modifier.size(20.dp), color = Color.White)
-                } else {
-                    Icon(Icons.Default.Build, null)
-                    Spacer(Modifier.width(8.dp))
-                    Text("FORGE SOUL DNA")
-                }
+                if (isProcessing) CircularProgressIndicator(modifier = Modifier.size(20.dp), color = Color.White)
+                else Text("FORGE SOUL DNA")
             }
-
             if (forgeResult.isNotBlank()) {
-                Card(
-                    modifier = Modifier.padding(vertical = 12.dp).fillMaxWidth(),
-                    colors = CardDefaults.cardColors(containerColor = Color.DarkGray)
-                ) {
+                Card(modifier = Modifier.padding(vertical = 12.dp).fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color.DarkGray)) {
                     Column(modifier = Modifier.padding(12.dp)) {
-                        Text("REFINED SOUL DNA:", style = MaterialTheme.typography.labelSmall, color = Color.Yellow)
                         Text(forgeResult, fontSize = 12.sp, color = Color.White)
-                        Spacer(Modifier.height(8.dp))
-                        Button(
-                            onClick = {
-                                personaInstructions = forgeResult
-                                forgeResult = ""
-                                forgeInput = ""
-                            },
-                            colors = ButtonDefaults.buttonColors(containerColor = Color.Yellow, contentColor = Color.Black)
-                        ) { Text("Apply to Blueprint") }
+                        Button(onClick = { personaInstructions = forgeResult; forgeResult = "" }) { Text("Apply to Soul") }
                     }
                 }
             }
             HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
         }
 
-        // --- SECTION: MANUFACTURE SOULS ---
+        // --- 🧬 MANUFACTURE SOULS (PERSONAS) ---
         item {
-            Text(if (personaId == 0) "Manufacture Soul" else "Edit Soul", color = Color.Cyan)
-            OutlinedTextField(
-                value = personaName,
-                onValueChange = { personaName = it },
-                label = { Text("Name") },
-                modifier = Modifier.fillMaxWidth()
+            Text("MANUFACTURE SOUL", color = Color.Cyan, style = MaterialTheme.typography.titleMedium)
+            OutlinedTextField(value = personaName, onValueChange = { personaName = it }, label = { Text("Soul Name") }, modifier = Modifier.fillMaxWidth())
+            OutlinedTextField(value = personaInstructions, onValueChange = { personaInstructions = it }, label = { Text("Instructions") }, modifier = Modifier.fillMaxWidth().heightIn(min = 100.dp))
+            Button(onClick = {
+                scope.launch {
+                    dao.insertPersona(PersonaEntity(id = personaId, name = personaName, instructions = personaInstructions))
+                    personaId = 0; personaName = ""; personaInstructions = ""
+                }
+            }, modifier = Modifier.padding(top = 8.dp)) { Text("Save Soul") }
+        }
+        items(personas) { persona ->
+            ListItem(
+                headlineContent = { Text(persona.name) },
+                modifier = Modifier.clickable { personaId = persona.id; personaName = persona.name; personaInstructions = persona.instructions },
+                trailingContent = { IconButton(onClick = { scope.launch { dao.deletePersona(persona) } }) { Icon(Icons.Default.Delete, null) } }
             )
-            Spacer(Modifier.height(8.dp))
-            OutlinedTextField(
-                value = personaInstructions,
-                onValueChange = { personaInstructions = it },
-                label = { Text("Instructions") },
-                modifier = Modifier.fillMaxWidth().heightIn(min = 100.dp)
-            )
+        }
+
+        item { HorizontalDivider(modifier = Modifier.padding(vertical = 24.dp)) }
+
+        // --- ⚙️ MANUFACTURE SCRIPTS (ENGINES) ---
+        item {
+            Text("MANUFACTURE ENGINE", color = Color.Green, style = MaterialTheme.typography.titleMedium)
+            Text("This is the structural mold for the platform.", fontSize = 11.sp, color = Color.Gray)
+            OutlinedTextField(value = engineName, onValueChange = { engineName = it }, label = { Text("Engine Name (e.g. YouTube Viral)") }, modifier = Modifier.fillMaxWidth())
+            OutlinedTextField(value = engineInstructions, onValueChange = { engineInstructions = it }, label = { Text("Logic/Instructions") }, modifier = Modifier.fillMaxWidth())
+            OutlinedTextField(value = engineTemplate, onValueChange = { engineTemplate = it }, label = { Text("Output Template") }, modifier = Modifier.fillMaxWidth().heightIn(min = 100.dp))
 
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 8.dp)) {
                 Button(onClick = {
                     scope.launch {
-                        dao.insertPersona(PersonaEntity(id = personaId, name = personaName, instructions = personaInstructions))
-                        personaId = 0; personaName = ""; personaInstructions = ""
+                        dao.insertEngine(EngineEntity(id = engineId, name = engineName, instructions = engineInstructions, draftTemplate = engineTemplate))
+                        engineId = 0; engineName = ""; engineInstructions = ""; engineTemplate = ""
                     }
-                }) { Text("Save Soul") }
-
-                if (personaId != 0) {
-                    TextButton(onClick = { personaId = 0; personaName = ""; personaInstructions = "" }) { Text("Cancel") }
-                }
+                }) { Text(if (engineId == 0) "Save Engine" else "Update Engine") }
+                if (engineId != 0) TextButton(onClick = { engineId = 0; engineName = ""; engineInstructions = ""; engineTemplate = "" }) { Text("Cancel") }
             }
         }
-
-        items(personas) { persona ->
+        items(engines) { engine ->
             ListItem(
-                headlineContent = { Text(persona.name) },
+                headlineContent = { Text(engine.name) },
                 modifier = Modifier.clickable {
-                    personaId = persona.id
-                    personaName = persona.name
-                    personaInstructions = persona.instructions
+                    engineId = engine.id
+                    engineName = engine.name
+                    engineInstructions = engine.instructions
+                    engineTemplate = engine.draftTemplate
                 },
-                trailingContent = {
-                    IconButton(onClick = { scope.launch { dao.deletePersona(persona) } }) {
-                        Icon(Icons.Default.Delete, contentDescription = null)
-                    }
-                }
+                trailingContent = { IconButton(onClick = { scope.launch { dao.deleteEngine(engine) } }) { Icon(Icons.Default.Delete, null) } }
             )
         }
+
+        item { Spacer(Modifier.height(100.dp)) } // Leave room to scroll past the bottom
     }
 }
