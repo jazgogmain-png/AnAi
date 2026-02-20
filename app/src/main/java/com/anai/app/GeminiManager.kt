@@ -21,34 +21,28 @@ class GeminiManager(
     private var currentKeyIndex = 0
     private val _uiLog = MutableStateFlow("[SYSTEM]: Architect G3 Online.")
     val uiLog = _uiLog.asStateFlow()
-
     private val _isProcessing = MutableStateFlow(false)
     val isProcessing = _isProcessing.asStateFlow()
 
+    // UI Output States
     private val _captionOptions = MutableStateFlow(listOf("", "", ""))
     val captionOptions = _captionOptions.asStateFlow()
-
     private val _overlayText = MutableStateFlow("")
     val overlayText = _overlayText.asStateFlow()
-
     private val _musicTip = MutableStateFlow("")
     val musicTip = _musicTip.asStateFlow()
-
     private val _seoTags = MutableStateFlow("")
     val seoTags = _seoTags.asStateFlow()
-
     private val _descPart = MutableStateFlow("")
     val descPart = _descPart.asStateFlow()
+    private val _hashtagPart = MutableStateFlow("")
+    val hashtagPart = _hashtagPart.asStateFlow()
 
     private suspend fun getNextModel(): GenerativeModel {
         val savedKeys = dao.getAllKeys().first()
         if (savedKeys.isEmpty()) throw IllegalStateException("Vault Empty")
-
-        val keyIndex = currentKeyIndex % savedKeys.size
-        val key = savedKeys[keyIndex].key
+        val key = savedKeys[currentKeyIndex % savedKeys.size].key
         currentKeyIndex++
-
-        // LASER PRECISION: G3 Flash Preview Only
         return GenerativeModel(
             modelName = "gemini-3-flash-preview",
             apiKey = key,
@@ -69,43 +63,61 @@ class GeminiManager(
         val videoUri = Uri.parse(videoUriString)
         _isProcessing.value = true
 
-        updateLog(">> BOOTING G3 PIXEL ENGINE...")
-        updateLog(">> INJECTING SOUL: ${personaName ?: "Unknown"}")
-
         val videoBytes = withContext(Dispatchers.IO) {
-            updateLog(">> SHREDDING BYTES FOR G3 UPLOAD...")
+            updateLog(">> EXTRACTING PIXELS FOR $platform...")
             context.contentResolver.openInputStream(videoUri)?.use { it.readBytes() }
         }
 
         runWithRotation { model ->
-            updateLog(">> HANDSHAKE WITH G3 FLASH PREVIEW...")
             model.generateContent(content {
                 videoBytes?.let { blob("video/mp4", it) }
                 text("""
-                    [SYSTEM ROLE]: $personaInstructions
-                    [STRUCTURAL RULES]: $engineInstructions
-                    [USER CONTEXT]: $contextInfo
-                    [REQUIRED OUTPUT FORMAT]: $engineTemplate
+                    SOUL (VOICE): $personaInstructions
+                    ENGINE (STRUCTURE): $engineInstructions
+                    PLATFORM: $platform
+                    CONTEXT: $contextInfo
+                    FORMAT: $engineTemplate
                 """.trimIndent())
             })
         }
         _isProcessing.value = false
     }
 
-    suspend fun chat(message: String) {
+    // NEW: PROMPT LAB EXTRACTION (VEO ENGINE)
+    suspend fun extractPrompt(videoUriString: String?): String {
+        if (videoUriString == null) return "No Video Loaded"
+        val videoUri = Uri.parse(videoUriString)
         _isProcessing.value = true
-        updateLog(">> QUERY: $message")
-        runWithRotation { model -> model.generateContent(message) }
+        updateLog(">> EXTRACTING VISUAL DNA...")
+
+        val videoBytes = withContext(Dispatchers.IO) {
+            context.contentResolver.openInputStream(videoUri)?.use { it.readBytes() }
+        }
+
+        var result = ""
+        runWithRotation { model ->
+            val response = model.generateContent(content {
+                videoBytes?.let { blob("video/mp4", it) }
+                text("""
+                    [TASK]: Reverse-engineer this video into a high-fidelity AI video prompt for Google Veo.
+                    [FOCUS]: Lighting, camera movement, lens type, color grading, and textures.
+                    [FORMAT]: Output ONLY the prompt. No intro or outro.
+                """.trimIndent())
+            })
+            result = response.text ?: "Extraction Failed"
+            response
+        }
         _isProcessing.value = false
+        return result
     }
 
-    fun clearLog() {
-        _uiLog.value = "[SYSTEM]: Architect Ready."
-        _captionOptions.value = listOf("", "", "")
-        _overlayText.value = ""
-        _musicTip.value = ""
-        _seoTags.value = ""
-        _descPart.value = ""
+    // NEW: THE STUDY CHAT SYSTEM
+    suspend fun chat(message: String) {
+        _isProcessing.value = true
+        updateLog(">> STUDY QUERY: $message")
+        runWithRotation { model ->
+            model.generateContent(message)
+        }
         _isProcessing.value = false
     }
 
@@ -113,42 +125,18 @@ class GeminiManager(
         var success = false
         var attempt = 0
         val savedKeys = dao.getAllKeys().first()
-
-        if (savedKeys.isEmpty()) {
-            updateLog(">> CRITICAL: NO KEYS FOUND.")
-            return
-        }
-
         while (attempt < savedKeys.size && !success) {
             try {
-                val model = getNextModel()
-                val keyNum = (currentKeyIndex - 1) % savedKeys.size
-                updateLog(">> TRYING NODE $keyNum...")
-
-                val response = withContext(Dispatchers.IO) { block(model) }
-
+                val response = withContext(Dispatchers.IO) { block(getNextModel()) }
                 response.text?.let { raw ->
-                    updateLog(">> STREAM CAPTURED. PARSING...")
                     _uiLog.value += "\n\n$raw"
-                    if (raw.contains("###ARCHITECT_DRAFT###")) {
-                        parseDraft(raw)
-                        updateLog(">> BLUEPRINT DRAFT SYNCED.")
-                    }
+                    if (raw.contains("###ARCHITECT_DRAFT###")) parseDraft(raw)
                     success = true
                 }
             } catch (e: Exception) {
                 attempt++
-                val errorMsg = e.message ?: ""
-                val errorType = when {
-                    errorMsg.contains("429") -> "QUOTA_FULL"
-                    errorMsg.contains("503") -> "G3_OVERLOAD"
-                    else -> "UNSTABLE_NODE"
-                }
-                updateLog(">> NODE $attempt ERROR: $errorType")
-                if (attempt < savedKeys.size) {
-                    updateLog(">> ROTATING IN 1.2s...")
-                    delay(1200)
-                }
+                updateLog(">> ROTATING NODE (Attempt $attempt)...")
+                delay(800)
             }
         }
     }
@@ -158,25 +146,27 @@ class GeminiManager(
         val lines = draft.trim().lines()
         val caps = mutableListOf("", "", "")
 
-        // Find hashtags first to append to captions
-        val hts = lines.find { it.startsWith("HT:") }?.removePrefix("HT:")?.trim() ?: ""
-
         lines.forEach { line ->
             val trimmed = line.trim()
             when {
-                trimmed.startsWith("C1:") -> caps[0] = "${trimmed.removePrefix("C1:").trim()}\n\n$hts"
-                trimmed.startsWith("C2:") -> caps[1] = "${trimmed.removePrefix("C2:").trim()}\n\n$hts"
-                trimmed.startsWith("C3:") -> caps[2] = "${trimmed.removePrefix("C3:").trim()}\n\n$hts"
+                trimmed.startsWith("C1:") -> caps[0] = trimmed.removePrefix("C1:").trim()
+                trimmed.startsWith("C2:") -> caps[1] = trimmed.removePrefix("C2:").trim()
+                trimmed.startsWith("C3:") -> caps[2] = trimmed.removePrefix("C3:").trim()
                 trimmed.startsWith("OV:") -> _overlayText.value = trimmed.removePrefix("OV:").trim()
                 trimmed.startsWith("MU:") -> _musicTip.value = trimmed.removePrefix("MU:").trim()
                 trimmed.startsWith("TAGS:") -> _seoTags.value = trimmed.removePrefix("TAGS:").trim()
                 trimmed.startsWith("DESC:") -> _descPart.value = trimmed.removePrefix("DESC:").trim()
+                trimmed.startsWith("HT:") -> _hashtagPart.value = trimmed.removePrefix("HT:").trim()
             }
         }
         _captionOptions.value = caps
     }
 
-    private fun updateLog(msg: String) {
-        _uiLog.value += "\n$msg"
+    fun clearLog() {
+        _uiLog.value = "[SYSTEM]: Architect Ready."; _isProcessing.value = false
+        _captionOptions.value = listOf("", "", ""); _overlayText.value = ""
+        _musicTip.value = ""; _seoTags.value = ""; _descPart.value = ""; _hashtagPart.value = ""
     }
+
+    private fun updateLog(msg: String) { _uiLog.value += "\n$msg" }
 }

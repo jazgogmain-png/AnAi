@@ -19,35 +19,47 @@ fun SettingsScreen(dao: ArchitectDao) {
     var newKey by remember { mutableStateOf("") }
     val keys by dao.getAllKeys().collectAsState(initial = emptyList())
 
-    LazyColumn(modifier = Modifier.fillMaxSize().padding(16.dp)) {
-        item {
-            Text("Key Vault", style = MaterialTheme.typography.headlineSmall)
-            OutlinedTextField(
-                value = newKey,
-                onValueChange = { newKey = it },
-                label = { Text("Add Gemini API Key") },
-                modifier = Modifier.fillMaxWidth()
-            )
-            Button(onClick = {
+    Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+        Text("Rotating Key Vault", style = MaterialTheme.typography.headlineSmall)
+        Text("Add multiple keys to rotate and bypass quotas.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+
+        Spacer(Modifier.height(8.dp))
+
+        OutlinedTextField(
+            value = newKey,
+            onValueChange = { newKey = it },
+            label = { Text("Add Gemini API Key") },
+            modifier = Modifier.fillMaxWidth()
+        )
+
+        Button(
+            onClick = {
                 if (newKey.isNotBlank()) {
                     scope.launch {
                         dao.insertKey(KeyEntity(key = newKey.trim()))
                         newKey = ""
                     }
                 }
-            }) { Text("Vault Key") }
-            Spacer(Modifier.height(16.dp))
+            },
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("Add to Rotation")
         }
 
-        items(keys) { keyObj ->
-            ListItem(
-                headlineContent = { Text("••••${keyObj.key.takeLast(4)}") },
-                trailingContent = {
-                    IconButton(onClick = { scope.launch { dao.deleteKey(keyObj) } }) {
-                        Icon(Icons.Default.Delete, contentDescription = "Delete")
+        Spacer(Modifier.height(16.dp))
+        HorizontalDivider()
+
+        LazyColumn(modifier = Modifier.weight(1f)) {
+            items(keys) { keyObj ->
+                ListItem(
+                    headlineContent = { Text("••••${keyObj.key.takeLast(4)}") },
+                    trailingContent = {
+                        IconButton(onClick = { scope.launch { dao.deleteKey(keyObj) } }) {
+                            Icon(Icons.Default.Delete, contentDescription = "Remove")
+                        }
                     }
-                }
-            )
+                )
+            }
         }
     }
 }
