@@ -69,7 +69,15 @@ fun MainAppScaffold(geminiManager: GeminiManager, mediaManager: MediaManager, da
 
                 HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
 
-                // RESTORED: THE STUDY
+                // NEW: PROMPT LAB IN SIDEBAR
+                NavigationDrawerItem(
+                    label = { Text("Prompt Lab (VEO)") },
+                    selected = currentScreen == "PromptLab",
+                    icon = { Icon(Icons.Default.Build, null) },
+                    onClick = { currentScreen = "PromptLab"; scope.launch { drawerState.close() } },
+                    modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)
+                )
+
                 NavigationDrawerItem(
                     label = { Text("The Study (Chat)") },
                     selected = currentScreen == "Chat",
@@ -82,7 +90,7 @@ fun MainAppScaffold(geminiManager: GeminiManager, mediaManager: MediaManager, da
                 NavigationDrawerItem(
                     label = { Text("Blueprint Factory") },
                     selected = currentScreen == "Blueprints",
-                    icon = { Icon(Icons.Default.Build, null) },
+                    icon = { Icon(Icons.Default.List, null) },
                     onClick = { currentScreen = "Blueprints"; scope.launch { drawerState.close() } },
                     modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)
                 )
@@ -101,6 +109,7 @@ fun MainAppScaffold(geminiManager: GeminiManager, mediaManager: MediaManager, da
                 AppTopBar(
                     title = when(currentScreen) {
                         "Studio" -> "${selectedPlatform?.name} Studio"
+                        "PromptLab" -> "Prompt Lab"
                         "Chat" -> "The Study"
                         "Blueprints" -> "Blueprint Factory"
                         "Settings" -> "Key Vault"
@@ -113,6 +122,7 @@ fun MainAppScaffold(geminiManager: GeminiManager, mediaManager: MediaManager, da
             Box(modifier = Modifier.padding(padding)) {
                 when (currentScreen) {
                     "Studio", "Architect" -> DashboardScreen(geminiManager, mediaManager, dao, selectedPlatform)
+                    "PromptLab" -> PromptLabScreen(geminiManager, mediaManager)
                     "Chat" -> ChatScreen(geminiManager)
                     "Blueprints" -> BlueprintsScreen(dao)
                     "Settings" -> SettingsScreen(dao)
