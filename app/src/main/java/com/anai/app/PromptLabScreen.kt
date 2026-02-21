@@ -6,6 +6,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -23,11 +24,13 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.anai.app.database.ArchitectDao
+import com.anai.app.database.BlueprintEntity
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun PromptLabScreen(geminiManager: GeminiManager, mediaManager: MediaManager) {
+fun PromptLabScreen(geminiManager: GeminiManager, mediaManager: MediaManager, dao: ArchitectDao) {
     val scope = rememberCoroutineScope()
     val clipboardManager = LocalClipboardManager.current
     val context = LocalContext.current
@@ -36,7 +39,10 @@ fun PromptLabScreen(geminiManager: GeminiManager, mediaManager: MediaManager) {
     var activePrompt by remember { mutableStateOf("No DNA extracted. Load video in Studio first.") }
     val promptHistory = remember { mutableStateListOf<String>() }
 
-    // THE ARCHITECT'S PROTOCOL: 300 Char Limit (Fr Fr Sweet Spot)
+    // --- VIBE INJECTOR STATE ---
+    val recentVibes by dao.getRecentVibes().collectAsState(initial = emptyList())
+    var selectedVibe by remember { mutableStateOf<BlueprintEntity?>(null) }
+
     val charLimit = 300
     val isNearLimit = activePrompt.length > (charLimit * 0.9)
     val isAtLimit = activePrompt.length >= charLimit
@@ -44,86 +50,76 @@ fun PromptLabScreen(geminiManager: GeminiManager, mediaManager: MediaManager) {
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
         Text("VEO PROMPT LAB", style = MaterialTheme.typography.headlineSmall, color = Color(0xFFBB86FC))
 
-        // Dynamic Telemetry Header
         Text(
-            text = when {
-                isAtLimit -> ">> PROTOCOL MAX REACHED: OPTIMIZED FOR VEO"
-                isNearLimit -> ">> WARNING: APPROACHING PAYLOAD CEILING"
-                else -> ">> ARCHITECT STATUS: READY FOR REVERSE-ENGINEERING"
-            },
+            text = if (selectedVibe != null) ">> AURA INJECTED: ${selectedVibe?.personaName}" else ">> ARCHITECT STATUS: READY",
             fontSize = 11.sp,
-            color = if (isAtLimit) Color.Red else if (isNearLimit) Color(0xFFFFA500) else Color.Cyan
+            color = if (selectedVibe != null) Color.Cyan else Color.Gray
         )
 
         Spacer(Modifier.height(16.dp))
 
         // --- EDITABLE MAIN PROMPT VIEWER ---
         Card(
-            modifier = Modifier.fillMaxWidth().weight(0.4f),
+            modifier = Modifier.fillMaxWidth().weight(0.35f),
             colors = CardDefaults.cardColors(containerColor = Color.Black),
             border = BorderStroke(1.dp, if (isAtLimit) Color.Red else Color(0xFFBB86FC).copy(alpha = 0.5f))
         ) {
             Box(modifier = Modifier.fillMaxSize().padding(12.dp)) {
                 OutlinedTextField(
                     value = activePrompt,
-                    onValueChange = {
-                        // Hard lockdown: Stop input at limit
-                        if (it.length <= charLimit) activePrompt = it
-                    },
+                    onValueChange = { if (it.length <= charLimit) activePrompt = it },
                     modifier = Modifier.fillMaxSize(),
-                    label = {
-                        Text(
-                            "Blueprint Data (${activePrompt.length}/$charLimit)",
-                            fontSize = 10.sp,
-                            color = if (isAtLimit) Color.Red else Color(0xFFBB86FC)
-                        )
-                    },
-                    textStyle = TextStyle(
-                        color = Color.White,
-                        fontFamily = FontFamily.Monospace,
-                        fontSize = 13.sp
-                    ),
+                    label = { Text("Blueprint Data (${activePrompt.length}/$charLimit)", fontSize = 10.sp) },
+                    textStyle = TextStyle(color = Color.White, fontFamily = FontFamily.Monospace, fontSize = 13.sp),
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedBorderColor = Color.Transparent,
                         unfocusedBorderColor = Color.Transparent,
-                        errorBorderColor = Color.Transparent,
                         unfocusedTextColor = Color.White,
                         focusedTextColor = Color.White
-                    ),
-                    isError = isAtLimit
+                    )
                 )
+            }
+        }
 
-                if (activePrompt.length > 20) {
-                    SmallFloatingActionButton(
-                        onClick = {
-                            clipboardManager.setText(AnnotatedString(activePrompt))
-                            if (!promptHistory.contains(activePrompt)) {
-                                promptHistory.add(0, activePrompt)
-                            }
-                            Toast.makeText(context, "DNA Archived!", Toast.LENGTH_SHORT).show()
-                        },
-                        modifier = Modifier.align(Alignment.BottomEnd).padding(8.dp),
-                        containerColor = if (isAtLimit) Color.Red else Color(0xFFBB86FC)
-                    ) {
-                        Icon(
-                            imageVector = if (isAtLimit) Icons.Default.Lock else Icons.Default.Check,
-                            contentDescription = "Save Action"
+        Spacer(Modifier.height(12.dp))
+
+        // --- 🧪 VIBE INJECTOR ROW ---
+        if (recentVibes.isNotEmpty()) {
+            Text("SELECT SUCCESSFUL AURA TO INJECT:", fontSize = 10.sp, color = Color.Gray)
+            LazyRow(
+                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                items(recentVibes) { vibe ->
+                    FilterChip(
+                        selected = selectedVibe?.id == vibe.id,
+                        onClick = { selectedVibe = if (selectedVibe?.id == vibe.id) null else vibe },
+                        label = { Text(vibe.personaName, fontSize = 10.sp) },
+                        leadingIcon = if (selectedVibe?.id == vibe.id) {
+                            { Icon(Icons.Default.Check, null, modifier = Modifier.size(14.dp)) }
+                        } else null,
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = Color(0xFFBB86FC).copy(alpha = 0.2f),
+                            selectedLabelColor = Color(0xFFBB86FC)
                         )
-                    }
+                    )
                 }
             }
         }
 
-        Spacer(Modifier.height(16.dp))
+        Spacer(Modifier.height(8.dp))
 
         Button(
             onClick = {
-                // FIXED: Launched inside a CoroutineScope to handle the suspend call
                 scope.launch {
                     val videoUri = mediaManager.player.currentMediaItem?.localConfiguration?.uri?.toString()
                     if (videoUri != null) {
-                        // Correctly calling the new extractPrompt signature
-                        activePrompt = geminiManager.extractPrompt(videoUri)
+                        // Check if we have an aura to inject or just a standard extract
+                        activePrompt = if (selectedVibe != null) {
+                            geminiManager.extractPromptWithVibe(videoUri, selectedVibe!!.auraProfile)
+                        } else {
+                            geminiManager.extractPrompt(videoUri)
+                        }
                     } else {
                         Toast.makeText(context, "Studio video missing!", Toast.LENGTH_SHORT).show()
                     }
@@ -135,13 +131,13 @@ fun PromptLabScreen(geminiManager: GeminiManager, mediaManager: MediaManager) {
         ) {
             if (isProcessing) CircularProgressIndicator(modifier = Modifier.size(24.dp), color = Color.White)
             else {
-                Icon(Icons.Default.Refresh, null)
+                Icon(if (selectedVibe != null) Icons.Default.FlashOn else Icons.Default.Refresh, null)
                 Spacer(Modifier.width(8.dp))
-                Text("EXTRACT VEO DNA")
+                Text(if (selectedVibe != null) "EXTRACT WITH AURA" else "EXTRACT VEO DNA")
             }
         }
 
-        Spacer(Modifier.height(24.dp))
+        Spacer(Modifier.height(16.dp))
 
         Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(Icons.Default.List, null, modifier = Modifier.size(16.dp), tint = Color.Gray)
@@ -149,20 +145,13 @@ fun PromptLabScreen(geminiManager: GeminiManager, mediaManager: MediaManager) {
             Text("RECALL HISTORY", style = MaterialTheme.typography.labelLarge, color = Color.Gray)
         }
 
-        HorizontalDivider(
-            modifier = Modifier.padding(vertical = 8.dp),
-            color = Color.Gray.copy(alpha = 0.2f)
-        )
+        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp), color = Color.Gray.copy(alpha = 0.2f))
 
-        LazyColumn(modifier = Modifier.weight(0.6f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        LazyColumn(modifier = Modifier.weight(0.5f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             items(promptHistory) { historyItem ->
                 ListItem(
-                    modifier = Modifier
-                        .border(1.dp, Color.Gray.copy(alpha = 0.2f), RoundedCornerShape(8.dp))
-                        .clickable { activePrompt = historyItem },
-                    headlineContent = {
-                        Text(text = historyItem, maxLines = 2, overflow = TextOverflow.Ellipsis, fontSize = 12.sp, color = Color.LightGray)
-                    },
+                    modifier = Modifier.border(1.dp, Color.Gray.copy(alpha = 0.1f), RoundedCornerShape(8.dp)).clickable { activePrompt = historyItem },
+                    headlineContent = { Text(text = historyItem, maxLines = 2, overflow = TextOverflow.Ellipsis, fontSize = 12.sp, color = Color.LightGray) },
                     trailingContent = {
                         IconButton(onClick = { promptHistory.remove(historyItem) }) {
                             Icon(Icons.Default.Delete, null, tint = Color.Red.copy(alpha = 0.4f), modifier = Modifier.size(20.dp))

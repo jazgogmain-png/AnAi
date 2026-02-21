@@ -69,7 +69,6 @@ fun MainAppScaffold(geminiManager: GeminiManager, mediaManager: MediaManager, da
 
                 HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
 
-                // SUCCESS VAULT (THE 200K WINNER'S CIRCLE)
                 NavigationDrawerItem(
                     label = { Text("Success Vault") },
                     selected = currentScreen == "Vault",
@@ -78,7 +77,6 @@ fun MainAppScaffold(geminiManager: GeminiManager, mediaManager: MediaManager, da
                     modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)
                 )
 
-                // PROMPT LAB (VEO DNA EXTRACTION)
                 NavigationDrawerItem(
                     label = { Text("Prompt Lab (VEO)") },
                     selected = currentScreen == "PromptLab",
@@ -87,7 +85,6 @@ fun MainAppScaffold(geminiManager: GeminiManager, mediaManager: MediaManager, da
                     modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)
                 )
 
-                // THE STUDY (BRAINSTORMING)
                 NavigationDrawerItem(
                     label = { Text("The Study (Chat)") },
                     selected = currentScreen == "Chat",
@@ -98,7 +95,6 @@ fun MainAppScaffold(geminiManager: GeminiManager, mediaManager: MediaManager, da
 
                 Spacer(Modifier.weight(1f))
 
-                // BLUEPRINT FACTORY (WHERE THE FORGE LIVES)
                 NavigationDrawerItem(
                     label = { Text("Blueprint Factory") },
                     selected = currentScreen == "Blueprints",
@@ -107,7 +103,6 @@ fun MainAppScaffold(geminiManager: GeminiManager, mediaManager: MediaManager, da
                     modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)
                 )
 
-                // KEY VAULT (ROTATION NODES)
                 NavigationDrawerItem(
                     label = { Text("Key Vault") },
                     selected = currentScreen == "Settings",
@@ -138,7 +133,8 @@ fun MainAppScaffold(geminiManager: GeminiManager, mediaManager: MediaManager, da
                 when (currentScreen) {
                     "Studio", "Architect" -> DashboardScreen(geminiManager, mediaManager, dao, selectedPlatform)
                     "Vault" -> VaultScreen(dao)
-                    "PromptLab" -> PromptLabScreen(geminiManager, mediaManager)
+                    // FIXED: Passing the dao here so the Vibe Injector works!
+                    "PromptLab" -> PromptLabScreen(geminiManager, mediaManager, dao)
                     "Chat" -> ChatScreen(geminiManager)
                     "Blueprints" -> BlueprintsScreen(dao, geminiManager)
                     "Settings" -> SettingsScreen(dao)
@@ -154,6 +150,8 @@ fun AppTopBar(title: String, onMenuClick: () -> Unit) {
     CenterAlignedTopAppBar(
         title = { Text(title) },
         navigationIcon = { IconButton(onClick = onMenuClick) { Icon(Icons.Default.Menu, null) } },
-        colors = TopAppBarDefaults.centerAlignedTopAppBarColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+        colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+        )
     )
 }
