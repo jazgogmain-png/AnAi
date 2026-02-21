@@ -35,6 +35,8 @@ class GeminiManager(
 
     private val _hookPart = MutableStateFlow("")
     val hookPart = _hookPart.asStateFlow()
+    private val _auraPart = MutableStateFlow("")
+    val auraPart = _auraPart.asStateFlow()
 
     private suspend fun getNextModel(): GenerativeModel {
         val savedKeys = dao.getAllKeys().first()
@@ -63,48 +65,45 @@ class GeminiManager(
 
         updateLog(">> BOOTING ANALYZER...")
         updateLog(">> TARGET: $platform STUDIO")
-        updateLog(">> SOUL: ${personaName ?: "Default"}")
 
         val squeezedBytes = withContext(Dispatchers.IO) {
             updateLog(">> INITIATING SQUEEZE PROTOCOL (150 NODES)...")
             val result = mediaManager.squeezeForAI(videoUri) { current, total ->
                 if (current % 10 == 0 || current == total) {
-                    updateLog(">> CRUNCHING: $current/$total NODES SNATCHED...")
+                    updateLog(">> CRUNCHING: $current/$total NODES...")
                 }
             }
-            updateLog(">> SQUEEZE COMPLETE: ${mediaManager.lastFrameCount} NODES | ${result?.size ?: 0} BYTES")
             result
         }
 
-        updateLog(">> HANDSHAKING WITH G3 NODES...")
-
         runWithRotation { model ->
-            updateLog(">> NODE ACTIVE. UPLOADING STORYBOARD...")
+            updateLog(">> HANDSHAKING WITH G3...")
             val response = model.generateContent(content {
                 squeezedBytes?.let { blob("image/jpeg", it) }
                 text("""
                     [SYSTEM ROLE]: You are the ANAI Architect.
                     
-                    [SOUL DNA - MANDATORY]: 
+                    [SOUL DNA]: 
                     $personaInstructions
                     
                     [ENGINE LOGIC]: 
                     $engineInstructions
                     
-                    [STRICT OUTPUT RULES]:
-                    1. Identify the 'GOLDEN HOOK' timestamp based on the 150 frames provided.
-                    2. The 'DESC' field MUST contain the STATIC BIO provided in the [SOUL DNA].
-                    3. Start the 'DESC' with one unique sentence based on video analysis.
+                    [STRICT RULES]:
+                    1. NO long descriptions.
+                    2. NO bio anchors for TikTok.
+                    3. Focus on: Captions, Music/Layover, Hook, and Aura.
+                    4. Use Emojis and Linguistic style from [SOUL DNA].
                     
                     [FORMAT TEMPLATE]: 
                     $engineTemplate
                 """.trimIndent())
             })
-            updateLog(">> RESPONSE RECEIVED. PARSING DATA...")
+            updateLog(">> PARSING DATA...")
             response
         }
 
-        updateLog(">> BLUEPRINT FINALIZED.")
+        updateLog(">> SCAN COMPLETE.")
         _isProcessing.value = false
     }
 
@@ -124,7 +123,12 @@ class GeminiManager(
         updateLog(">> FORGING NEW SOUL DNA...")
         var result = ""
         runWithRotation { model ->
-            val response = model.generateContent("Turn this into a structured Soul DNA sheet with sections for BIO_ANCHOR, STATIC_HT, STATIC_TAGS and TONE: $description")
+            val response = model.generateContent("""
+                Turn this into a structured Soul DNA sheet with sections for BIO_ANCHOR, STATIC_HT, STATIC_TAGS and TONE.
+                [STRICT RULE]: Preserve Taglish, Conyo, and emojis.
+                [EMOJI MANDATE]: Use relevant emojis.
+                Description: $description
+            """.trimIndent())
             result = response.text ?: "Forge Failed"
             updateLog(">> SOUL CRYSTALLIZED.")
             response
@@ -133,16 +137,14 @@ class GeminiManager(
         return result
     }
 
-    // UPDATED: High-Fidelity Hook-Tuned Prompt Extraction
     suspend fun extractPrompt(videoUriString: String?): String {
         if (videoUriString == null) return "No Video"
         val videoUri = Uri.parse(videoUriString)
         _isProcessing.value = true
-        updateLog(">> INITIATING VEO REVERSE-ENGINEERING...")
+        updateLog(">> INITIATING VEO DNA EXTRACTION...")
 
-        // Using Squeezer instead of raw bytes: Much faster, still enough detail for a prompt
         val squeezedBytes = withContext(Dispatchers.IO) {
-            mediaManager.squeezeForAI(videoUri) { _, _ -> } // Silent progress
+            mediaManager.squeezeForAI(videoUri) { _, _ -> }
         }
 
         var result = ""
@@ -151,12 +153,11 @@ class GeminiManager(
                 squeezedBytes?.let { blob("image/jpeg", it) }
                 text("""
                     [TASK]: Reverse-engineer this storyboard into a high-fidelity Veo prompt.
-                    [STRICT RULE]: Identify the 'GOLDEN HOOK' (the single most visually impactful moment).
-                    [FORMAT]: The prompt must explicitly instruction the AI generator to start with or peak at that GOLDEN HOOK moment within the first 1.5 seconds.
+                    [STRICT RULE]: Max 300 characters. Peak at GOLDEN HOOK within 1.5s.
                 """.trimIndent())
             })
             result = response.text ?: ""
-            updateLog(">> HOOK-TUNED PROMPT EXTRACTED.")
+            updateLog(">> VEO PROMPT EXTRACTED.")
             response
         }
         _isProcessing.value = false
@@ -173,14 +174,12 @@ class GeminiManager(
                 response.text?.let { raw ->
                     if (raw.contains("###ARCHITECT_DRAFT###")) {
                         parseDraft(raw)
-                    } else if (_isProcessing.value && !raw.contains("[ARCHITECT]")) {
-                        // Regular logging handled elsewhere
                     }
                     success = true
                 }
             } catch (e: Exception) {
                 attempt++
-                updateLog(">> ROTATING NODE (ATTEMPT $attempt)...")
+                updateLog(">> ROTATING NODE...")
                 delay(800)
             }
         }
@@ -200,9 +199,7 @@ class GeminiManager(
                 t.startsWith("HT:") -> _hashtagPart.value = t.removePrefix("HT:").trim()
                 t.startsWith("DESC:") -> _descPart.value = t.removePrefix("DESC:").trim()
                 t.startsWith("HOOK:") -> _hookPart.value = t.removePrefix("HOOK:").trim()
-                t.startsWith("BIO_ANCHOR:") -> {
-                    _descPart.value += "\n\n" + t.removePrefix("BIO_ANCHOR:").trim()
-                }
+                t.startsWith("AURA:") -> _auraPart.value = t.removePrefix("AURA:").trim()
             }
         }
         _captionOptions.value = caps
@@ -212,6 +209,7 @@ class GeminiManager(
         _uiLog.value = "[SYSTEM]: Architect Ready."; _isProcessing.value = false
         _captionOptions.value = listOf("", "", ""); _seoTags.value = ""
         _descPart.value = ""; _hashtagPart.value = ""; _hookPart.value = ""
+        _auraPart.value = ""
     }
 
     private fun updateLog(msg: String) { _uiLog.value += "\n$msg" }

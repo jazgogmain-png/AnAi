@@ -40,9 +40,11 @@ fun ChatScreen(geminiManager: GeminiManager) {
 
         // --- CONVERSATION WINDOW ---
         Box(modifier = Modifier.weight(1f).padding(vertical = 8.dp)) {
-            // Auto-scroll logic when logs change
+            // Auto-scroll logic: Scans the end of the log as it grows
             LaunchedEffect(logs) {
-                listState.animateScrollToItem(0)
+                if (logs.isNotEmpty()) {
+                    listState.animateScrollToItem(0)
+                }
             }
 
             LazyColumn(
@@ -51,6 +53,7 @@ fun ChatScreen(geminiManager: GeminiManager) {
             ) {
                 item {
                     Text(
+                        // Cleaning up the display so internal draft markers don't clutter the study
                         text = logs.substringBefore("###ARCHITECT_DRAFT###"),
                         style = MaterialTheme.typography.bodyMedium,
                         fontFamily = FontFamily.Monospace,
@@ -63,7 +66,7 @@ fun ChatScreen(geminiManager: GeminiManager) {
                 }
             }
 
-            // Loading indicator for chat
+            // High-precision loading bar
             if (isProcessing) {
                 LinearProgressIndicator(
                     modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(2.dp),
@@ -82,9 +85,10 @@ fun ChatScreen(geminiManager: GeminiManager) {
                 value = chatInput,
                 onValueChange = { chatInput = it },
                 modifier = Modifier.weight(1f),
-                placeholder = { Text("Ask the Soul for a better hook...") },
+                placeholder = { Text("Ask for a better hook...") },
                 maxLines = 4,
-                shape = RoundedCornerShape(12.dp)
+                shape = RoundedCornerShape(12.dp),
+                enabled = !isProcessing
             )
             Spacer(modifier = Modifier.width(8.dp))
             IconButton(
@@ -93,6 +97,7 @@ fun ChatScreen(geminiManager: GeminiManager) {
                         val msg = chatInput
                         chatInput = ""
                         scope.launch {
+                            // Properly launching the chat session
                             geminiManager.chat(msg)
                         }
                     }

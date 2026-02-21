@@ -23,7 +23,7 @@ interface ArchitectDao {
     suspend fun insertPersona(persona: PersonaEntity)
 
     @Delete
-    suspend fun deletePersona(persona: PersonaEntity) // <--- THIS WAS LIKELY MISSING
+    suspend fun deletePersona(persona: PersonaEntity)
 
     // --- ENGINES (SCRIPTS) ---
     @Query("SELECT * FROM engines")
@@ -33,7 +33,7 @@ interface ArchitectDao {
     suspend fun insertEngine(engine: EngineEntity)
 
     @Delete
-    suspend fun deleteEngine(engine: EngineEntity) // <--- THIS TOO
+    suspend fun deleteEngine(engine: EngineEntity)
 
     // --- PLATFORMS ---
     @Query("SELECT * FROM platforms")
@@ -44,4 +44,20 @@ interface ArchitectDao {
 
     @Delete
     suspend fun deletePlatform(platform: PlatformEntity)
+
+    // --- SUCCESS VAULT (BLUEPRINT HISTORY) ---
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertBlueprint(blueprint: BlueprintEntity)
+
+    @Query("SELECT * FROM blueprint_history ORDER BY timestamp DESC")
+    fun getAllHistory(): Flow<List<BlueprintEntity>>
+
+    @Query("SELECT * FROM blueprint_history WHERE isStarred = 1")
+    fun getWinnersCircle(): Flow<List<BlueprintEntity>>
+
+    @Query("UPDATE blueprint_history SET isStarred = :starred WHERE id = :id")
+    suspend fun toggleStar(id: Int, starred: Boolean)
+
+    @Query("DELETE FROM blueprint_history WHERE id = :id")
+    suspend fun deleteBlueprint(id: Int)
 }

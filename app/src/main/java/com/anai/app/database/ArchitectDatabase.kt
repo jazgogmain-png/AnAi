@@ -10,9 +10,10 @@ import androidx.room.RoomDatabase
         KeyEntity::class,
         PersonaEntity::class,
         EngineEntity::class,
-        PlatformEntity::class
+        PlatformEntity::class,
+        BlueprintEntity::class // <--- PROTOCOL: SUCCESS VAULT ADDED
     ],
-    version = 2,
+    version = 3, // <--- BUMPING TO V3 TO TRIGGER THE NEW SCHEMA
     exportSchema = false
 )
 abstract class ArchitectDatabase : RoomDatabase() {

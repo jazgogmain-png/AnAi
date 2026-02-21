@@ -29,6 +29,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.anai.app.database.ArchitectDao
+import com.anai.app.database.BlueprintEntity
 import com.anai.app.database.EngineEntity
 import com.anai.app.database.PersonaEntity
 import com.anai.app.database.PlatformEntity
@@ -70,9 +71,12 @@ fun DashboardScreen(
     val seoTags by geminiManager.seoTags.collectAsState()
     val descPart by geminiManager.descPart.collectAsState()
     val hashtagPart by geminiManager.hashtagPart.collectAsState()
-    val hookPart by geminiManager.hookPart.collectAsState() // NEW: Observe the Golden Hook
 
-    // REFINED PICKER: Requesting Persistable Permissions to stop the "Lip"
+    // INTELLIGENCE OBSERVATION
+    val hookPart by geminiManager.hookPart.collectAsState()
+    val auraPart by geminiManager.auraPart.collectAsState()
+
+    // REFINED PICKER
     val videoPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         uri?.let {
             try {
@@ -148,8 +152,8 @@ fun DashboardScreen(
             }
         }
 
-        // --- REFINED DESCRIPTION (Merged with Golden Hook, Hook, and Bio) ---
-        if (descPart.isNotBlank() || hookPart.isNotBlank() || selectedPlatform?.name?.contains("YouTube", true) == true) {
+        // --- AUDIT & DESCRIPTION ---
+        if (descPart.isNotBlank() || hookPart.isNotBlank() || auraPart.isNotBlank()) {
             item {
                 val rawInstructions = selectedPersona?.instructions ?: ""
                 val extractedBio = if (rawInstructions.contains("BIO_ANCHOR:")) {
@@ -157,26 +161,16 @@ fun DashboardScreen(
                 } else ""
 
                 val combinedContent = buildString {
-                    // 1. ADD GOLDEN HOOK AT THE TOP
-                    if (hookPart.isNotBlank()) {
-                        append("🏆 GOLDEN HOOK: ")
-                        append(hookPart)
-                        append("\n\n---\n\n")
-                    }
-
+                    if (hookPart.isNotBlank()) append("🎯 GOLDEN HOOK: $hookPart\n")
+                    if (auraPart.isNotBlank()) append("✨ AURA SCAN: $auraPart\n")
+                    if (hookPart.isNotBlank() || auraPart.isNotBlank()) append("\n---\n\n")
                     append(descPart)
-                    if (extractedBio.isNotBlank()) {
-                        append("\n\n")
-                        append(extractedBio)
-                    }
-                    if (hashtagPart.isNotBlank()) {
-                        append("\n\n")
-                        append(hashtagPart)
-                    }
+                    if (extractedBio.isNotBlank()) append("\n\n$extractedBio")
+                    if (hashtagPart.isNotBlank()) append("\n\n$hashtagPart")
                 }
 
                 Column(modifier = Modifier.fillMaxWidth().border(1.dp, Color.Cyan.copy(alpha = 0.5f), MaterialTheme.shapes.medium).padding(12.dp)) {
-                    Text("Architect Description", style = MaterialTheme.typography.labelLarge, color = Color.Cyan)
+                    Text("Architect Audit & Description", style = MaterialTheme.typography.labelLarge, color = Color.Cyan)
                     OutlinedTextField(
                         value = combinedContent,
                         onValueChange = {},
@@ -184,7 +178,7 @@ fun DashboardScreen(
                         modifier = Modifier.fillMaxWidth().heightIn(min = 100.dp).pointerInput(Unit) {
                             detectTapGestures(onDoubleTap = {
                                 clipboardManager.setText(AnnotatedString(combinedContent))
-                                Toast.makeText(context, "Full Description Copied!", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(context, "Full Blueprint Copied!", Toast.LENGTH_SHORT).show()
                             })
                         },
                         textStyle = MaterialTheme.typography.bodyMedium
@@ -194,7 +188,7 @@ fun DashboardScreen(
         }
 
         // --- TAG CHIPS ---
-        if (seoTags.isNotBlank() || selectedPlatform?.name?.contains("YouTube", true) == true) {
+        if (seoTags.isNotBlank()) {
             item {
                 Column(modifier = Modifier.fillMaxWidth().border(1.dp, Color.Yellow.copy(alpha = 0.5f), MaterialTheme.shapes.medium).padding(12.dp)) {
                     Text("Metadata & Tags (Tap to Copy)", style = MaterialTheme.typography.labelLarge, color = Color.Yellow)
@@ -215,19 +209,49 @@ fun DashboardScreen(
             }
         }
 
-        // --- EXECUTE BUTTON ---
+        // --- ACTION ROW: EXECUTE & VAULT ---
         item {
-            Button(
-                onClick = {
-                    scope.launch {
-                        geminiManager.analyzeVideo("", selectedPlatform?.name ?: "Master", selectedPersona?.name, selectedPersona?.instructions, videoUriString, selectedEngine?.instructions, selectedEngine?.draftTemplate)
-                    }
-                },
-                modifier = Modifier.fillMaxWidth().height(56.dp),
-                enabled = selectedEngine != null && selectedPersona != null && videoUriString != null && !isProcessing
-            ) {
-                if (isProcessing) CircularProgressIndicator(modifier = Modifier.size(24.dp), color = Color.Green)
-                else Text("EXECUTE BLUEPRINT SCAN", fontWeight = FontWeight.Bold)
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(
+                    onClick = {
+                        scope.launch {
+                            geminiManager.analyzeVideo("", selectedPlatform?.name ?: "Master", selectedPersona?.name, selectedPersona?.instructions, videoUriString, selectedEngine?.instructions, selectedEngine?.draftTemplate)
+                        }
+                    },
+                    modifier = Modifier.weight(1f).height(56.dp),
+                    enabled = selectedEngine != null && selectedPersona != null && videoUriString != null && !isProcessing
+                ) {
+                    if (isProcessing) CircularProgressIndicator(modifier = Modifier.size(24.dp), color = Color.Green)
+                    else Text("EXECUTE SCAN", fontWeight = FontWeight.Bold)
+                }
+
+                // THE VAULT BUTTON
+                IconButton(
+                    onClick = {
+                        scope.launch {
+                            // NEW: Snatch the frame as a local JPG before saving
+                            val thumbUri = videoUriString?.let { mediaManager.snatchThumbnail(Uri.parse(it)) }
+
+                            val currentCap = if (captionOptions.size > activeCaptionIndex) captionOptions[activeCaptionIndex] else ""
+                            val blueprint = BlueprintEntity(
+                                videoUri = videoUriString ?: "",
+                                thumbnailUri = thumbUri, // Saved path
+                                personaName = selectedPersona?.name ?: "Unknown",
+                                platform = selectedPlatform?.name ?: "Master",
+                                titleUsed = currentCap,
+                                hookTimestamp = hookPart,
+                                auraProfile = auraPart,
+                                fullDescription = descPart
+                            )
+                            dao.insertBlueprint(blueprint)
+                            Toast.makeText(context, "Blueprint Vaulted!", Toast.LENGTH_SHORT).show()
+                        }
+                    },
+                    modifier = Modifier.height(56.dp).width(56.dp).border(1.dp, Color.Yellow.copy(alpha = 0.5f), MaterialTheme.shapes.medium),
+                    enabled = descPart.isNotBlank() && !isProcessing
+                ) {
+                    Icon(Icons.Default.Star, contentDescription = "Vault", tint = Color.Yellow)
+                }
             }
         }
         item { Spacer(Modifier.height(32.dp)) }

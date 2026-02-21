@@ -9,6 +9,8 @@ import androidx.media3.exoplayer.ExoPlayer
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.ByteArrayOutputStream
+import java.io.File
+import java.io.FileOutputStream
 
 class MediaManager(private val context: Context) {
     val player = ExoPlayer.Builder(context).build()
@@ -23,9 +25,34 @@ class MediaManager(private val context: Context) {
     }
 
     /**
+     * SNATCH THUMBNAIL:
+     * Saves the first frame to internal storage so the Vault stays visual forever.
+     */
+    suspend fun snatchThumbnail(uri: Uri): String? = withContext(Dispatchers.IO) {
+        val retriever = MediaMetadataRetriever()
+        try {
+            retriever.setDataSource(context, uri)
+            val bitmap = retriever.getFrameAtTime(0, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
+
+            bitmap?.let {
+                val fileName = "thumb_${System.currentTimeMillis()}.jpg"
+                val file = File(context.filesDir, fileName)
+                FileOutputStream(file).use { out ->
+                    it.compress(Bitmap.CompressFormat.JPEG, 85, out)
+                }
+                it.recycle()
+                file.absolutePath // This is the URI we save to the BlueprintEntity
+            }
+        } catch (e: Exception) {
+            null
+        } finally {
+            retriever.release()
+        }
+    }
+
+    /**
      * THE SQUEEZER (150 PROTOCOL):
      * Extracts a high-density storyboard for precision "Golden Hook" detection.
-     * Stays under 20MB while providing nearly 18fps for short videos.
      */
     suspend fun squeezeForAI(
         uri: Uri,
@@ -37,16 +64,12 @@ class MediaManager(private val context: Context) {
             val stream = ByteArrayOutputStream()
             val durationMs = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLong() ?: 0L
 
-            // STATIC 150: High-fidelity vision across all video lengths
             lastFrameCount = 150
-
             val totalUs = durationMs * 1000
             val intervalUs = if (lastFrameCount > 1) totalUs / (lastFrameCount - 1) else 0L
 
             for (i in 0 until lastFrameCount) {
                 val timeUs = i * intervalUs
-
-                // Report real-time telemetry back to GeminiManager
                 onProgress(i + 1, lastFrameCount)
 
                 val bitmap = try {
@@ -56,11 +79,9 @@ class MediaManager(private val context: Context) {
                 }
 
                 bitmap?.let {
-                    // Downscale to 480p (Portrait: 480x854)
                     val scaled = Bitmap.createScaledBitmap(it, 480, 854, false)
-                    // 75% quality JPEGs balance visual soul and upload speed
                     scaled.compress(Bitmap.CompressFormat.JPEG, 75, stream)
-                    it.recycle() // Critical for avoiding OutOfMemory on 150 frames
+                    it.recycle()
                 }
             }
             stream.toByteArray()
@@ -69,7 +90,7 @@ class MediaManager(private val context: Context) {
         } finally {
             try {
                 retriever.release()
-            } catch (e: Exception) { /* Handled */ }
+            } catch (e: Exception) { }
         }
     }
 

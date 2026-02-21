@@ -5,7 +5,6 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -13,7 +12,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.anai.app.database.*
+import com.anai.app.database.ArchitectDao
+import com.anai.app.database.EngineEntity
+import com.anai.app.database.PersonaEntity
 import kotlinx.coroutines.launch
 
 @Composable
@@ -51,7 +52,12 @@ fun BlueprintsScreen(dao: ArchitectDao, geminiManager: GeminiManager) {
                 modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)
             )
             Button(
-                onClick = { scope.launch { forgeResult = geminiManager.forgePersona(forgeInput) } },
+                onClick = {
+                    scope.launch {
+                        // Correctly calling the suspend function in CoroutineScope
+                        forgeResult = geminiManager.forgePersona(forgeInput)
+                    }
+                },
                 modifier = Modifier.fillMaxWidth(),
                 enabled = forgeInput.isNotBlank() && !isProcessing
             ) {
@@ -59,10 +65,16 @@ fun BlueprintsScreen(dao: ArchitectDao, geminiManager: GeminiManager) {
                 else Text("FORGE SOUL DNA")
             }
             if (forgeResult.isNotBlank()) {
-                Card(modifier = Modifier.padding(vertical = 12.dp).fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color.DarkGray)) {
+                Card(
+                    modifier = Modifier.padding(vertical = 12.dp).fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = Color.DarkGray)
+                ) {
                     Column(modifier = Modifier.padding(12.dp)) {
                         Text(forgeResult, fontSize = 12.sp, color = Color.White)
-                        Button(onClick = { personaInstructions = forgeResult; forgeResult = "" }) { Text("Apply to Soul") }
+                        Spacer(Modifier.height(8.dp))
+                        Button(onClick = { personaInstructions = forgeResult; forgeResult = "" }) {
+                            Text("Apply to Soul")
+                        }
                     }
                 }
             }
@@ -73,7 +85,7 @@ fun BlueprintsScreen(dao: ArchitectDao, geminiManager: GeminiManager) {
         item {
             Text("MANUFACTURE SOUL", color = Color.Cyan, style = MaterialTheme.typography.titleMedium)
             OutlinedTextField(value = personaName, onValueChange = { personaName = it }, label = { Text("Soul Name") }, modifier = Modifier.fillMaxWidth())
-            OutlinedTextField(value = personaInstructions, onValueChange = { personaInstructions = it }, label = { Text("Instructions") }, modifier = Modifier.fillMaxWidth().heightIn(min = 100.dp))
+            OutlinedTextField(value = personaInstructions, onValueChange = { personaInstructions = it }, label = { Text("Instructions (Linguistic Markers & Emojis)") }, modifier = Modifier.fillMaxWidth().heightIn(min = 100.dp))
             Button(onClick = {
                 scope.launch {
                     dao.insertPersona(PersonaEntity(id = personaId, name = personaName, instructions = personaInstructions))
@@ -91,11 +103,11 @@ fun BlueprintsScreen(dao: ArchitectDao, geminiManager: GeminiManager) {
 
         item { HorizontalDivider(modifier = Modifier.padding(vertical = 24.dp)) }
 
-        // --- ⚙️ MANUFACTURE SCRIPTS (ENGINES) ---
+        // --- ⚙️ MANUFACTURE ENGINES ---
         item {
             Text("MANUFACTURE ENGINE", color = Color.Green, style = MaterialTheme.typography.titleMedium)
-            Text("This is the structural mold for the platform.", fontSize = 11.sp, color = Color.Gray)
-            OutlinedTextField(value = engineName, onValueChange = { engineName = it }, label = { Text("Engine Name (e.g. YouTube Viral)") }, modifier = Modifier.fillMaxWidth())
+            Text("The structural mold for the platform.", fontSize = 11.sp, color = Color.Gray)
+            OutlinedTextField(value = engineName, onValueChange = { engineName = it }, label = { Text("Engine Name (e.g. TikTok Ultra Minimal)") }, modifier = Modifier.fillMaxWidth())
             OutlinedTextField(value = engineInstructions, onValueChange = { engineInstructions = it }, label = { Text("Logic/Instructions") }, modifier = Modifier.fillMaxWidth())
             OutlinedTextField(value = engineTemplate, onValueChange = { engineTemplate = it }, label = { Text("Output Template") }, modifier = Modifier.fillMaxWidth().heightIn(min = 100.dp))
 
@@ -122,6 +134,6 @@ fun BlueprintsScreen(dao: ArchitectDao, geminiManager: GeminiManager) {
             )
         }
 
-        item { Spacer(Modifier.height(100.dp)) } // Leave room to scroll past the bottom
+        item { Spacer(Modifier.height(100.dp)) }
     }
 }

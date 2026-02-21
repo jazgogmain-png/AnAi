@@ -69,6 +69,15 @@ fun MainAppScaffold(geminiManager: GeminiManager, mediaManager: MediaManager, da
 
                 HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
 
+                // SUCCESS VAULT (THE 200K WINNER'S CIRCLE)
+                NavigationDrawerItem(
+                    label = { Text("Success Vault") },
+                    selected = currentScreen == "Vault",
+                    icon = { Icon(Icons.Default.Star, null) },
+                    onClick = { currentScreen = "Vault"; scope.launch { drawerState.close() } },
+                    modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)
+                )
+
                 // PROMPT LAB (VEO DNA EXTRACTION)
                 NavigationDrawerItem(
                     label = { Text("Prompt Lab (VEO)") },
@@ -114,6 +123,7 @@ fun MainAppScaffold(geminiManager: GeminiManager, mediaManager: MediaManager, da
                 AppTopBar(
                     title = when(currentScreen) {
                         "Studio" -> "${selectedPlatform?.name} Studio"
+                        "Vault" -> "Success Vault"
                         "PromptLab" -> "Prompt Lab"
                         "Chat" -> "The Study"
                         "Blueprints" -> "Blueprint Factory"
@@ -127,9 +137,9 @@ fun MainAppScaffold(geminiManager: GeminiManager, mediaManager: MediaManager, da
             Box(modifier = Modifier.padding(padding)) {
                 when (currentScreen) {
                     "Studio", "Architect" -> DashboardScreen(geminiManager, mediaManager, dao, selectedPlatform)
+                    "Vault" -> VaultScreen(dao)
                     "PromptLab" -> PromptLabScreen(geminiManager, mediaManager)
                     "Chat" -> ChatScreen(geminiManager)
-                    // PASSING GEMINI MANAGER TO ENABLE THE FORGE
                     "Blueprints" -> BlueprintsScreen(dao, geminiManager)
                     "Settings" -> SettingsScreen(dao)
                 }

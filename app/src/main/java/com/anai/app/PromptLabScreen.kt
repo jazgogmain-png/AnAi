@@ -118,9 +118,11 @@ fun PromptLabScreen(geminiManager: GeminiManager, mediaManager: MediaManager) {
 
         Button(
             onClick = {
+                // FIXED: Launched inside a CoroutineScope to handle the suspend call
                 scope.launch {
                     val videoUri = mediaManager.player.currentMediaItem?.localConfiguration?.uri?.toString()
                     if (videoUri != null) {
+                        // Correctly calling the new extractPrompt signature
                         activePrompt = geminiManager.extractPrompt(videoUri)
                     } else {
                         Toast.makeText(context, "Studio video missing!", Toast.LENGTH_SHORT).show()
@@ -142,12 +144,15 @@ fun PromptLabScreen(geminiManager: GeminiManager, mediaManager: MediaManager) {
         Spacer(Modifier.height(24.dp))
 
         Row(verticalAlignment = Alignment.CenterVertically) {
-            // Swapping 'History' for 'List' which is in the standard set
             Icon(Icons.Default.List, null, modifier = Modifier.size(16.dp), tint = Color.Gray)
             Spacer(Modifier.width(8.dp))
             Text("RECALL HISTORY", style = MaterialTheme.typography.labelLarge, color = Color.Gray)
         }
-        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp), color = Color.Gray.copy(alpha = 0.2f))
+
+        HorizontalDivider(
+            modifier = Modifier.padding(vertical = 8.dp),
+            color = Color.Gray.copy(alpha = 0.2f)
+        )
 
         LazyColumn(modifier = Modifier.weight(0.6f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             items(promptHistory) { historyItem ->
