@@ -1,5 +1,6 @@
 package com.anai.app
 
+import android.content.Intent
 import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -70,8 +71,21 @@ fun DashboardScreen(
     val descPart by geminiManager.descPart.collectAsState()
     val hashtagPart by geminiManager.hashtagPart.collectAsState()
 
-    val videoPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
-        uri?.let { videoUriString = it.toString(); mediaManager.loadVideo(it); geminiManager.clearLog() }
+    // REFINED PICKER: Requesting Persistable Permissions to stop the "Lip"
+    val videoPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        uri?.let {
+            try {
+                // Tells Android: "Keep this file open for me, I'm crunching it."
+                context.contentResolver.takePersistableUriPermission(
+                    it, Intent.FLAG_GRANT_READ_URI_PERMISSION
+                )
+            } catch (e: Exception) {
+                // Fallback for providers that don't support persistence
+            }
+            videoUriString = it.toString()
+            mediaManager.loadVideo(it)
+            geminiManager.clearLog()
+        }
     }
 
     LazyColumn(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -82,7 +96,7 @@ fun DashboardScreen(
                 Text(text = if (selectedPlatform == null) "Master Studio" else "${selectedPlatform.name} Studio", style = MaterialTheme.typography.labelLarge, color = Color.Gray)
                 Row {
                     if (videoUriString == null) {
-                        IconButton(onClick = { videoPicker.launch("video/*") }) {
+                        IconButton(onClick = { videoPicker.launch(arrayOf("video/*")) }) {
                             Icon(Icons.Default.Add, null, tint = Color.Cyan)
                         }
                     }
@@ -115,7 +129,7 @@ fun DashboardScreen(
             }
         }
 
-        // --- DRAFT STATION (TITLES) ---
+        // --- DRAFT STATION ---
         item {
             Column(modifier = Modifier.fillMaxWidth().border(1.dp, MaterialTheme.colorScheme.outline, MaterialTheme.shapes.medium).padding(12.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -136,24 +150,23 @@ fun DashboardScreen(
             }
         }
 
-        // --- REFINED DESCRIPTION (Merged with Hashtags & Static Bio) ---
+        // --- REFINED DESCRIPTION (Explicit UI Merge) ---
         if (descPart.isNotBlank() || selectedPlatform?.name?.contains("YouTube", true) == true) {
             item {
-                // EXPLICIT MERGE LOGIC: We extract the BIO_ANCHOR directly from the persona instructions
                 val rawInstructions = selectedPersona?.instructions ?: ""
                 val extractedBio = if (rawInstructions.contains("BIO_ANCHOR:")) {
                     rawInstructions.substringAfter("BIO_ANCHOR:").substringBefore("STATIC_HT:").trim()
                 } else ""
 
                 val combinedContent = buildString {
-                    append(descPart) // G3's unique hook
+                    append(descPart)
                     if (extractedBio.isNotBlank()) {
                         append("\n\n")
-                        append(extractedBio) // Your mandatory bio
+                        append(extractedBio)
                     }
                     if (hashtagPart.isNotBlank()) {
                         append("\n\n")
-                        append(hashtagPart) // The hashtag stack
+                        append(hashtagPart)
                     }
                 }
 
@@ -175,7 +188,7 @@ fun DashboardScreen(
             }
         }
 
-        // --- TAG CHIPS (Tappable individual items) ---
+        // --- TAG CHIPS ---
         if (seoTags.isNotBlank() || selectedPlatform?.name?.contains("YouTube", true) == true) {
             item {
                 Column(modifier = Modifier.fillMaxWidth().border(1.dp, Color.Yellow.copy(alpha = 0.5f), MaterialTheme.shapes.medium).padding(12.dp)) {

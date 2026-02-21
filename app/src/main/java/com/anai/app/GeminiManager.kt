@@ -24,7 +24,6 @@ class GeminiManager(
     private val _isProcessing = MutableStateFlow(false)
     val isProcessing = _isProcessing.asStateFlow()
 
-    // UI Data States
     private val _captionOptions = MutableStateFlow(listOf("", "", ""))
     val captionOptions = _captionOptions.asStateFlow()
     private val _seoTags = MutableStateFlow("")
@@ -59,14 +58,30 @@ class GeminiManager(
         val videoUri = Uri.parse(videoUriString)
         _isProcessing.value = true
 
-        val videoBytes = withContext(Dispatchers.IO) {
-            updateLog(">> INITIALIZING PIXEL CRUSHER...")
-            context.contentResolver.openInputStream(videoUri)?.use { it.readBytes() }
+        updateLog(">> BOOTING ANALYZER...")
+        updateLog(">> TARGET: $platform STUDIO")
+        updateLog(">> SOUL: ${personaName ?: "Default"}")
+
+        val squeezedBytes = withContext(Dispatchers.IO) {
+            updateLog(">> INITIATING SQUEEZE PROTOCOL (1 FPS)...")
+
+            // The Progress HUD
+            val result = mediaManager.squeezeForAI(videoUri) { current, total ->
+                if (current % 5 == 0 || current == total) {
+                    updateLog(">> CRUNCHING: $current/$total NODES SNATCHED...")
+                }
+            }
+
+            updateLog(">> SQUEEZE COMPLETE: ${mediaManager.lastFrameCount} NODES | ${result?.size ?: 0} BYTES")
+            result
         }
 
+        updateLog(">> HANDSHAKING WITH G3 NODES...")
+
         runWithRotation { model ->
-            model.generateContent(content {
-                videoBytes?.let { blob("video/mp4", it) }
+            updateLog(">> NODE ACTIVE. UPLOADING STORYBOARD...")
+            val response = model.generateContent(content {
+                squeezedBytes?.let { blob("image/jpeg", it) }
                 text("""
                     [SYSTEM ROLE]: You are the ANAI Architect.
                     
@@ -87,26 +102,57 @@ class GeminiManager(
                     $engineTemplate
                 """.trimIndent())
             })
+            updateLog(">> RESPONSE RECEIVED. PARSING DATA...")
+            response
         }
+
+        updateLog(">> BLUEPRINT FINALIZED.")
         _isProcessing.value = false
     }
 
     // PERSONA FORGE
     suspend fun forgePersona(description: String): String {
         _isProcessing.value = true
+        updateLog(">> FORGING NEW SOUL DNA...")
         var result = ""
         runWithRotation { model ->
             val response = model.generateContent("Turn this into a structured Soul DNA sheet with sections for BIO_ANCHOR, STATIC_HT, STATIC_TAGS and TONE: $description")
             result = response.text ?: "Forge Failed"
+            updateLog(">> SOUL CRYSTALLIZED.")
             response
         }
         _isProcessing.value = false
         return result
     }
 
+    // THE MISSING LINK: RESTORED
+    private suspend fun runWithRotation(block: suspend (GenerativeModel) -> com.google.ai.client.generativeai.type.GenerateContentResponse) {
+        var success = false
+        var attempt = 0
+        val savedKeys = dao.getAllKeys().first()
+        while (attempt < savedKeys.size && !success) {
+            try {
+                val response = withContext(Dispatchers.IO) { block(getNextModel()) }
+                response.text?.let { raw ->
+                    if (raw.contains("###ARCHITECT_DRAFT###")) {
+                        parseDraft(raw)
+                    } else if (_isProcessing.value) {
+                        _uiLog.value += "\n\n$raw"
+                    }
+                    success = true
+                }
+            } catch (e: Exception) {
+                attempt++
+                updateLog(">> ROTATING NODE (ATTEMPT $attempt)...")
+                delay(800)
+            }
+        }
+    }
+
     suspend fun extractPrompt(videoUriString: String?): String {
         if (videoUriString == null) return "No Video"
         _isProcessing.value = true
+        updateLog(">> INITIATING VEO REVERSE-ENGINEERING...")
         val videoUri = Uri.parse(videoUriString)
         val videoBytes = withContext(Dispatchers.IO) { context.contentResolver.openInputStream(videoUri)?.use { it.readBytes() } }
         var result = ""
@@ -116,6 +162,7 @@ class GeminiManager(
                 text("[TASK]: Reverse-engineer this video into a high-fidelity Veo prompt.")
             })
             result = response.text ?: ""
+            updateLog(">> PROMPT EXTRACTED.")
             response
         }
         _isProcessing.value = false
@@ -133,30 +180,6 @@ class GeminiManager(
         _isProcessing.value = false
     }
 
-    private suspend fun runWithRotation(block: suspend (GenerativeModel) -> com.google.ai.client.generativeai.type.GenerateContentResponse) {
-        var success = false
-        var attempt = 0
-        val savedKeys = dao.getAllKeys().first()
-        while (attempt < savedKeys.size && !success) {
-            try {
-                val response = withContext(Dispatchers.IO) { block(getNextModel()) }
-                response.text?.let { raw ->
-                    if (raw.contains("###ARCHITECT_DRAFT###")) {
-                        _uiLog.value += "\n\n$raw"
-                        parseDraft(raw)
-                    } else if (_isProcessing.value) {
-                        _uiLog.value += "\n\n$raw"
-                    }
-                    success = true
-                }
-            } catch (e: Exception) {
-                attempt++
-                updateLog(">> ROTATING NODE...")
-                delay(800)
-            }
-        }
-    }
-
     private fun parseDraft(raw: String) {
         val draft = raw.substringAfter("###ARCHITECT_DRAFT###").substringBefore("###END###")
         val lines = draft.trim().lines()
@@ -170,7 +193,6 @@ class GeminiManager(
                 t.startsWith("TAGS:") -> _seoTags.value = t.removePrefix("TAGS:").trim()
                 t.startsWith("HT:") -> _hashtagPart.value = t.removePrefix("HT:").trim()
                 t.startsWith("DESC:") -> _descPart.value = t.removePrefix("DESC:").trim()
-                // The new catch for the bio anchor block
                 t.startsWith("BIO_ANCHOR:") -> {
                     _descPart.value += "\n\n" + t.removePrefix("BIO_ANCHOR:").trim()
                 }
@@ -185,5 +207,5 @@ class GeminiManager(
         _descPart.value = ""; _hashtagPart.value = ""
     }
 
-    private fun updateLog(msg: String) { _uiLog.value += msg }
+    private fun updateLog(msg: String) { _uiLog.value += "\n$msg" }
 }

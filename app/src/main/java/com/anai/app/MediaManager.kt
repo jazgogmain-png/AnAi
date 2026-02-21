@@ -13,39 +13,62 @@ import java.io.ByteArrayOutputStream
 class MediaManager(private val context: Context) {
     val player = ExoPlayer.Builder(context).build()
 
+    // Telemetry for the Matrix HUD
+    var lastFrameCount = 0
+
     fun loadVideo(uri: Uri) {
         val mediaItem = MediaItem.fromUri(uri)
         player.setMediaItem(mediaItem)
         player.prepare()
     }
 
-    // THE SQUEEZER: Creates a lightweight representation for G3
-    suspend fun squeezeForAI(uri: Uri): ByteArray? = withContext(Dispatchers.IO) {
+    /**
+     * THE SQUEEZER: Dynamic 1FPS logic.
+     * Extracts a cinematic storyboard to keep AI analysis fast and under API limits.
+     */
+    suspend fun squeezeForAI(
+        uri: Uri,
+        onProgress: (Int, Int) -> Unit
+    ): ByteArray? = withContext(Dispatchers.IO) {
         val retriever = MediaMetadataRetriever()
         try {
             retriever.setDataSource(context, uri)
-
-            // Instead of the whole video, we grab 5 key frames to "squeezer" the data
-            // G3 can analyze these perfectly for style, lighting, and content
             val stream = ByteArrayOutputStream()
-            val duration = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLong() ?: 0L
+            val durationMs = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLong() ?: 0L
 
-            val frameCount = 5
-            for (i in 0 until frameCount) {
-                val timeUs = (duration * 1000 / frameCount) * i
-                val bitmap = retriever.getFrameAtTime(timeUs, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
+            // GOLDILOCKS ZONE: 1 frame per second, capped at 100 frames (~6MB total)
+            lastFrameCount = (durationMs / 1000).toInt().coerceIn(3, 100)
 
-                // Downscale to 480p and compress to 70% quality
+            val totalUs = durationMs * 1000
+            val intervalUs = if (lastFrameCount > 1) totalUs / (lastFrameCount - 1) else 0L
+
+            for (i in 0 until lastFrameCount) {
+                val timeUs = i * intervalUs
+
+                // Report progress to the Matrix
+                onProgress(i + 1, lastFrameCount)
+
+                val bitmap = try {
+                    retriever.getFrameAtTime(timeUs, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
+                } catch (e: Exception) {
+                    null
+                }
+
                 bitmap?.let {
+                    // Downscale to 480p (Perfect for G3's vision)
                     val scaled = Bitmap.createScaledBitmap(it, 480, 854, false)
-                    scaled.compress(Bitmap.CompressFormat.JPEG, 70, stream)
+                    // 75% quality JPEGs balance detail and speed
+                    scaled.compress(Bitmap.CompressFormat.JPEG, 75, stream)
+                    it.recycle() // Immediate memory cleanup
                 }
             }
             stream.toByteArray()
         } catch (e: Exception) {
             null
         } finally {
-            retriever.release()
+            try {
+                retriever.release()
+            } catch (e: Exception) { /* Already released */ }
         }
     }
 
