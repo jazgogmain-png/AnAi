@@ -5,6 +5,8 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.List
+import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -88,7 +90,8 @@ fun MainAppScaffold(geminiManager: GeminiManager, mediaManager: MediaManager, da
                 NavigationDrawerItem(
                     label = { Text("The Study (Chat)") },
                     selected = currentScreen == "Chat",
-                    icon = { Icon(Icons.Default.Send, null) },
+                    // FIXED: Using AutoMirrored version of Send
+                    icon = { Icon(Icons.AutoMirrored.Filled.Send, null) },
                     onClick = { currentScreen = "Chat"; scope.launch { drawerState.close() } },
                     modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)
                 )
@@ -98,7 +101,8 @@ fun MainAppScaffold(geminiManager: GeminiManager, mediaManager: MediaManager, da
                 NavigationDrawerItem(
                     label = { Text("Blueprint Factory") },
                     selected = currentScreen == "Blueprints",
-                    icon = { Icon(Icons.Default.List, null) },
+                    // FIXED: Using AutoMirrored version of List
+                    icon = { Icon(Icons.AutoMirrored.Filled.List, null) },
                     onClick = { currentScreen = "Blueprints"; scope.launch { drawerState.close() } },
                     modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)
                 )
@@ -133,7 +137,6 @@ fun MainAppScaffold(geminiManager: GeminiManager, mediaManager: MediaManager, da
                 when (currentScreen) {
                     "Studio", "Architect" -> DashboardScreen(geminiManager, mediaManager, dao, selectedPlatform)
                     "Vault" -> VaultScreen(dao)
-                    // FIXED: Passing the dao here so the Vibe Injector works!
                     "PromptLab" -> PromptLabScreen(geminiManager, mediaManager, dao)
                     "Chat" -> ChatScreen(geminiManager)
                     "Blueprints" -> BlueprintsScreen(dao, geminiManager)

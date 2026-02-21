@@ -62,54 +62,27 @@ class GeminiManager(
         if (videoUriString == null) return
         val videoUri = Uri.parse(videoUriString)
         _isProcessing.value = true
-
-        updateLog(">> BOOTING ANALYZER...")
-        updateLog(">> TARGET: $platform STUDIO")
-
         val squeezedBytes = withContext(Dispatchers.IO) {
-            updateLog(">> INITIATING SQUEEZE PROTOCOL (150 NODES)...")
-            val result = mediaManager.squeezeForAI(videoUri) { current, total ->
-                if (current % 10 == 0 || current == total) {
-                    updateLog(">> CRUNCHING: $current/$total NODES...")
-                }
-            }
-            result
+            mediaManager.squeezeForAI(videoUri) { _, _ -> }
         }
-
         runWithRotation { model ->
-            updateLog(">> HANDSHAKING WITH G3...")
             val response = model.generateContent(content {
                 squeezedBytes?.let { blob("image/jpeg", it) }
                 text("""
                     [SYSTEM ROLE]: You are the ANAI Architect.
-                    
-                    [SOUL DNA]: 
-                    $personaInstructions
-                    
-                    [ENGINE LOGIC]: 
-                    $engineInstructions
-                    
-                    [STRICT RULES]:
-                    1. NO long descriptions.
-                    2. NO bio anchors for TikTok.
-                    3. Focus on: Captions, Music/Layover, Hook, and Aura.
-                    4. Use Emojis and Linguistic style from [SOUL DNA].
-                    
-                    [FORMAT TEMPLATE]: 
-                    $engineTemplate
+                    [SOUL DNA]: $personaInstructions
+                    [ENGINE LOGIC]: $engineInstructions
+                    [STRICT RULES]: 1. NO long descriptions. 2. NO bio anchors for TikTok. 
+                    [FORMAT TEMPLATE]: $engineTemplate
                 """.trimIndent())
             })
-            updateLog(">> PARSING DATA...")
             response
         }
-
-        updateLog(">> SCAN COMPLETE.")
         _isProcessing.value = false
     }
 
     suspend fun chat(message: String) {
         _isProcessing.value = true
-        updateLog("\n[USER]: $message")
         runWithRotation { model ->
             val response = model.generateContent(message)
             response.text?.let { updateLog("\n[ARCHITECT]: $it") }
@@ -120,17 +93,10 @@ class GeminiManager(
 
     suspend fun forgePersona(description: String): String {
         _isProcessing.value = true
-        updateLog(">> FORGING NEW SOUL DNA...")
         var result = ""
         runWithRotation { model ->
-            val response = model.generateContent("""
-                Turn this into a structured Soul DNA sheet with sections for BIO_ANCHOR, STATIC_HT, STATIC_TAGS and TONE.
-                [STRICT RULE]: Preserve Taglish, Conyo, and emojis.
-                [EMOJI MANDATE]: Use relevant emojis.
-                Description: $description
-            """.trimIndent())
+            val response = model.generateContent("Turn this into a Soul DNA sheet. Preserve personality: $description")
             result = response.text ?: "Forge Failed"
-            updateLog(">> SOUL CRYSTALLIZED.")
             response
         }
         _isProcessing.value = false
@@ -141,27 +107,51 @@ class GeminiManager(
         if (videoUriString == null) return "No Video"
         val videoUri = Uri.parse(videoUriString)
         _isProcessing.value = true
-        updateLog(">> INITIATING VEO DNA EXTRACTION...")
-
-        val squeezedBytes = withContext(Dispatchers.IO) {
-            mediaManager.squeezeForAI(videoUri) { _, _ -> }
+        val squeezedBytes = withContext(Dispatchers.IO) { mediaManager.squeezeForAI(videoUri) { _, _ -> } }
+        var result = ""
+        runWithRotation { model ->
+            val response = model.generateContent(content {
+                squeezedBytes?.let { blob("image/jpeg", it) }
+                text("[TASK]: Reverse-engineer this into a 300-char Veo prompt. Peak at GOLDEN HOOK within 1.5s.")
+            })
+            result = response.text ?: ""
+            response
         }
+        _isProcessing.value = false
+        return result
+    }
 
+    suspend fun extractPromptWithVibe(videoUriString: String?, referenceAura: String): String {
+        if (videoUriString == null) return "No Video"
+        val videoUri = Uri.parse(videoUriString)
+        _isProcessing.value = true
+        val squeezedBytes = withContext(Dispatchers.IO) { mediaManager.squeezeForAI(videoUri) { _, _ -> } }
         var result = ""
         runWithRotation { model ->
             val response = model.generateContent(content {
                 squeezedBytes?.let { blob("image/jpeg", it) }
                 text("""
-                    [TASK]: Reverse-engineer this storyboard into a high-fidelity Veo prompt.
-                    [STRICT RULE]: Max 300 characters. Peak at GOLDEN HOOK within 1.5s.
+                    [TASK]: Reverse-engineer this storyboard into a Veo prompt.
+                    [VIBE INJECTION]: Use this high-performing Aura profile as the blueprint: "$referenceAura"
+                    [STRICT RULE]: Max 300 chars. Ensure visual style matches the reference Aura.
                 """.trimIndent())
             })
             result = response.text ?: ""
-            updateLog(">> VEO PROMPT EXTRACTED.")
             response
         }
         _isProcessing.value = false
         return result
+    }
+
+    // --- THE FIX: ADD THIS FUNCTION ---
+    fun clearLog() {
+        _captionOptions.value = listOf("", "", "")
+        _seoTags.value = ""
+        _descPart.value = ""
+        _hashtagPart.value = ""
+        _hookPart.value = ""
+        _auraPart.value = ""
+        _uiLog.value = "[SYSTEM]: Architect G3 Online. Ready for Scan."
     }
 
     private suspend fun runWithRotation(block: suspend (GenerativeModel) -> com.google.ai.client.generativeai.type.GenerateContentResponse) {
@@ -172,14 +162,11 @@ class GeminiManager(
             try {
                 val response = withContext(Dispatchers.IO) { block(getNextModel()) }
                 response.text?.let { raw ->
-                    if (raw.contains("###ARCHITECT_DRAFT###")) {
-                        parseDraft(raw)
-                    }
+                    if (raw.contains("###ARCHITECT_DRAFT###")) parseDraft(raw)
                     success = true
                 }
             } catch (e: Exception) {
                 attempt++
-                updateLog(">> ROTATING NODE...")
                 delay(800)
             }
         }
@@ -203,13 +190,6 @@ class GeminiManager(
             }
         }
         _captionOptions.value = caps
-    }
-
-    fun clearLog() {
-        _uiLog.value = "[SYSTEM]: Architect Ready."; _isProcessing.value = false
-        _captionOptions.value = listOf("", "", ""); _seoTags.value = ""
-        _descPart.value = ""; _hashtagPart.value = ""; _hookPart.value = ""
-        _auraPart.value = ""
     }
 
     private fun updateLog(msg: String) { _uiLog.value += "\n$msg" }

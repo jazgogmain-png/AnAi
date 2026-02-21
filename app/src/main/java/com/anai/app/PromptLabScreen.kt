@@ -10,6 +10,7 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -114,7 +115,6 @@ fun PromptLabScreen(geminiManager: GeminiManager, mediaManager: MediaManager, da
                 scope.launch {
                     val videoUri = mediaManager.player.currentMediaItem?.localConfiguration?.uri?.toString()
                     if (videoUri != null) {
-                        // Check if we have an aura to inject or just a standard extract
                         activePrompt = if (selectedVibe != null) {
                             geminiManager.extractPromptWithVibe(videoUri, selectedVibe!!.auraProfile)
                         } else {
@@ -129,9 +129,10 @@ fun PromptLabScreen(geminiManager: GeminiManager, mediaManager: MediaManager, da
             enabled = !isProcessing,
             colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFBB86FC))
         ) {
-            if (isProcessing) CircularProgressIndicator(modifier = Modifier.size(24.dp), color = Color.White)
-            else {
-                Icon(if (selectedVibe != null) Icons.Default.FlashOn else Icons.Default.Refresh, null)
+            if (isProcessing) {
+                CircularProgressIndicator(modifier = Modifier.size(24.dp), color = Color.White)
+            } else {
+                Icon(if (selectedVibe != null) Icons.Default.ThumbUp else Icons.Default.Refresh, null)
                 Spacer(Modifier.width(8.dp))
                 Text(if (selectedVibe != null) "EXTRACT WITH AURA" else "EXTRACT VEO DNA")
             }
@@ -140,7 +141,8 @@ fun PromptLabScreen(geminiManager: GeminiManager, mediaManager: MediaManager, da
         Spacer(Modifier.height(16.dp))
 
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(Icons.Default.List, null, modifier = Modifier.size(16.dp), tint = Color.Gray)
+            // FIXED: Using AutoMirrored version of List
+            Icon(Icons.AutoMirrored.Filled.List, null, modifier = Modifier.size(16.dp), tint = Color.Gray)
             Spacer(Modifier.width(8.dp))
             Text("RECALL HISTORY", style = MaterialTheme.typography.labelLarge, color = Color.Gray)
         }

@@ -5,7 +5,6 @@ import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -13,7 +12,10 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -24,7 +26,6 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -65,18 +66,14 @@ fun DashboardScreen(
         }
     }
 
-    // --- OBSERVE DATA ---
     val isProcessing by geminiManager.isProcessing.collectAsState()
     val captionOptions by geminiManager.captionOptions.collectAsState()
     val seoTags by geminiManager.seoTags.collectAsState()
     val descPart by geminiManager.descPart.collectAsState()
     val hashtagPart by geminiManager.hashtagPart.collectAsState()
-
-    // INTELLIGENCE OBSERVATION
     val hookPart by geminiManager.hookPart.collectAsState()
     val auraPart by geminiManager.auraPart.collectAsState()
 
-    // REFINED PICKER
     val videoPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         uri?.let {
             try {
@@ -103,13 +100,16 @@ fun DashboardScreen(
                         }
                     }
                     IconButton(onClick = { videoUriString = null; geminiManager.clearLog() }) {
-                        Icon(Icons.Default.Refresh, null, modifier = Modifier.size(20.dp))
+                        Icon(
+                            imageVector = Icons.Filled.Refresh,
+                            contentDescription = "Refresh",
+                            modifier = Modifier.size(20.dp)
+                        )
                     }
                 }
             }
         }
 
-        // --- SOUL & ENGINE SELECTORS ---
         item {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedCard(onClick = { showPersonaSheet = true }, modifier = Modifier.fillMaxWidth()) {
@@ -131,7 +131,6 @@ fun DashboardScreen(
             }
         }
 
-        // --- DRAFT STATION ---
         item {
             Column(modifier = Modifier.fillMaxWidth().border(1.dp, MaterialTheme.colorScheme.outline, MaterialTheme.shapes.medium).padding(12.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -152,20 +151,13 @@ fun DashboardScreen(
             }
         }
 
-        // --- AUDIT & DESCRIPTION ---
         if (descPart.isNotBlank() || hookPart.isNotBlank() || auraPart.isNotBlank()) {
             item {
-                val rawInstructions = selectedPersona?.instructions ?: ""
-                val extractedBio = if (rawInstructions.contains("BIO_ANCHOR:")) {
-                    rawInstructions.substringAfter("BIO_ANCHOR:").substringBefore("STATIC_HT:").trim()
-                } else ""
-
                 val combinedContent = buildString {
                     if (hookPart.isNotBlank()) append("🎯 GOLDEN HOOK: $hookPart\n")
                     if (auraPart.isNotBlank()) append("✨ AURA SCAN: $auraPart\n")
                     if (hookPart.isNotBlank() || auraPart.isNotBlank()) append("\n---\n\n")
                     append(descPart)
-                    if (extractedBio.isNotBlank()) append("\n\n$extractedBio")
                     if (hashtagPart.isNotBlank()) append("\n\n$hashtagPart")
                 }
 
@@ -187,7 +179,6 @@ fun DashboardScreen(
             }
         }
 
-        // --- TAG CHIPS ---
         if (seoTags.isNotBlank()) {
             item {
                 Column(modifier = Modifier.fillMaxWidth().border(1.dp, Color.Yellow.copy(alpha = 0.5f), MaterialTheme.shapes.medium).padding(12.dp)) {
@@ -209,7 +200,6 @@ fun DashboardScreen(
             }
         }
 
-        // --- ACTION ROW: EXECUTE & VAULT ---
         item {
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(
@@ -225,17 +215,14 @@ fun DashboardScreen(
                     else Text("EXECUTE SCAN", fontWeight = FontWeight.Bold)
                 }
 
-                // THE VAULT BUTTON
                 IconButton(
                     onClick = {
                         scope.launch {
-                            // NEW: Snatch the frame as a local JPG before saving
                             val thumbUri = videoUriString?.let { mediaManager.snatchThumbnail(Uri.parse(it)) }
-
                             val currentCap = if (captionOptions.size > activeCaptionIndex) captionOptions[activeCaptionIndex] else ""
                             val blueprint = BlueprintEntity(
                                 videoUri = videoUriString ?: "",
-                                thumbnailUri = thumbUri, // Saved path
+                                thumbnailUri = thumbUri,
                                 personaName = selectedPersona?.name ?: "Unknown",
                                 platform = selectedPlatform?.name ?: "Master",
                                 titleUsed = currentCap,
