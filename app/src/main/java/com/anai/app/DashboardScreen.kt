@@ -70,18 +70,16 @@ fun DashboardScreen(
     val seoTags by geminiManager.seoTags.collectAsState()
     val descPart by geminiManager.descPart.collectAsState()
     val hashtagPart by geminiManager.hashtagPart.collectAsState()
+    val hookPart by geminiManager.hookPart.collectAsState() // NEW: Observe the Golden Hook
 
     // REFINED PICKER: Requesting Persistable Permissions to stop the "Lip"
     val videoPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         uri?.let {
             try {
-                // Tells Android: "Keep this file open for me, I'm crunching it."
                 context.contentResolver.takePersistableUriPermission(
                     it, Intent.FLAG_GRANT_READ_URI_PERMISSION
                 )
-            } catch (e: Exception) {
-                // Fallback for providers that don't support persistence
-            }
+            } catch (e: Exception) {}
             videoUriString = it.toString()
             mediaManager.loadVideo(it)
             geminiManager.clearLog()
@@ -150,8 +148,8 @@ fun DashboardScreen(
             }
         }
 
-        // --- REFINED DESCRIPTION (Explicit UI Merge) ---
-        if (descPart.isNotBlank() || selectedPlatform?.name?.contains("YouTube", true) == true) {
+        // --- REFINED DESCRIPTION (Merged with Golden Hook, Hook, and Bio) ---
+        if (descPart.isNotBlank() || hookPart.isNotBlank() || selectedPlatform?.name?.contains("YouTube", true) == true) {
             item {
                 val rawInstructions = selectedPersona?.instructions ?: ""
                 val extractedBio = if (rawInstructions.contains("BIO_ANCHOR:")) {
@@ -159,6 +157,13 @@ fun DashboardScreen(
                 } else ""
 
                 val combinedContent = buildString {
+                    // 1. ADD GOLDEN HOOK AT THE TOP
+                    if (hookPart.isNotBlank()) {
+                        append("🏆 GOLDEN HOOK: ")
+                        append(hookPart)
+                        append("\n\n---\n\n")
+                    }
+
                     append(descPart)
                     if (extractedBio.isNotBlank()) {
                         append("\n\n")

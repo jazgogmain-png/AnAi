@@ -33,6 +33,9 @@ class GeminiManager(
     private val _hashtagPart = MutableStateFlow("")
     val hashtagPart = _hashtagPart.asStateFlow()
 
+    private val _hookPart = MutableStateFlow("")
+    val hookPart = _hookPart.asStateFlow()
+
     private suspend fun getNextModel(): GenerativeModel {
         val savedKeys = dao.getAllKeys().first()
         if (savedKeys.isEmpty()) throw IllegalStateException("Vault Empty")
@@ -63,15 +66,12 @@ class GeminiManager(
         updateLog(">> SOUL: ${personaName ?: "Default"}")
 
         val squeezedBytes = withContext(Dispatchers.IO) {
-            updateLog(">> INITIATING SQUEEZE PROTOCOL (1 FPS)...")
-
-            // The Progress HUD
+            updateLog(">> INITIATING SQUEEZE PROTOCOL (150 NODES)...")
             val result = mediaManager.squeezeForAI(videoUri) { current, total ->
-                if (current % 5 == 0 || current == total) {
+                if (current % 10 == 0 || current == total) {
                     updateLog(">> CRUNCHING: $current/$total NODES SNATCHED...")
                 }
             }
-
             updateLog(">> SQUEEZE COMPLETE: ${mediaManager.lastFrameCount} NODES | ${result?.size ?: 0} BYTES")
             result
         }
@@ -92,11 +92,9 @@ class GeminiManager(
                     $engineInstructions
                     
                     [STRICT OUTPUT RULES]:
-                    1. The 'DESC' field MUST contain the STATIC BIO provided in the [SOUL DNA].
-                    2. Start the 'DESC' with one unique sentence based on the video analysis, then append the full STATIC BIO.
-                    3. Do not summarize the bio. Use it EXACTLY as written.
-                    4. Merge Static Hashtags from Soul with 2 dynamic ones.
-                    5. Ensure Titles (C1, C2, C3) include 1-2 relevant emojis at the end.
+                    1. Identify the 'GOLDEN HOOK' timestamp based on the 150 frames provided.
+                    2. The 'DESC' field MUST contain the STATIC BIO provided in the [SOUL DNA].
+                    3. Start the 'DESC' with one unique sentence based on video analysis.
                     
                     [FORMAT TEMPLATE]: 
                     $engineTemplate
@@ -110,7 +108,17 @@ class GeminiManager(
         _isProcessing.value = false
     }
 
-    // PERSONA FORGE
+    suspend fun chat(message: String) {
+        _isProcessing.value = true
+        updateLog("\n[USER]: $message")
+        runWithRotation { model ->
+            val response = model.generateContent(message)
+            response.text?.let { updateLog("\n[ARCHITECT]: $it") }
+            response
+        }
+        _isProcessing.value = false
+    }
+
     suspend fun forgePersona(description: String): String {
         _isProcessing.value = true
         updateLog(">> FORGING NEW SOUL DNA...")
@@ -125,7 +133,36 @@ class GeminiManager(
         return result
     }
 
-    // THE MISSING LINK: RESTORED
+    // UPDATED: High-Fidelity Hook-Tuned Prompt Extraction
+    suspend fun extractPrompt(videoUriString: String?): String {
+        if (videoUriString == null) return "No Video"
+        val videoUri = Uri.parse(videoUriString)
+        _isProcessing.value = true
+        updateLog(">> INITIATING VEO REVERSE-ENGINEERING...")
+
+        // Using Squeezer instead of raw bytes: Much faster, still enough detail for a prompt
+        val squeezedBytes = withContext(Dispatchers.IO) {
+            mediaManager.squeezeForAI(videoUri) { _, _ -> } // Silent progress
+        }
+
+        var result = ""
+        runWithRotation { model ->
+            val response = model.generateContent(content {
+                squeezedBytes?.let { blob("image/jpeg", it) }
+                text("""
+                    [TASK]: Reverse-engineer this storyboard into a high-fidelity Veo prompt.
+                    [STRICT RULE]: Identify the 'GOLDEN HOOK' (the single most visually impactful moment).
+                    [FORMAT]: The prompt must explicitly instruction the AI generator to start with or peak at that GOLDEN HOOK moment within the first 1.5 seconds.
+                """.trimIndent())
+            })
+            result = response.text ?: ""
+            updateLog(">> HOOK-TUNED PROMPT EXTRACTED.")
+            response
+        }
+        _isProcessing.value = false
+        return result
+    }
+
     private suspend fun runWithRotation(block: suspend (GenerativeModel) -> com.google.ai.client.generativeai.type.GenerateContentResponse) {
         var success = false
         var attempt = 0
@@ -136,8 +173,8 @@ class GeminiManager(
                 response.text?.let { raw ->
                     if (raw.contains("###ARCHITECT_DRAFT###")) {
                         parseDraft(raw)
-                    } else if (_isProcessing.value) {
-                        _uiLog.value += "\n\n$raw"
+                    } else if (_isProcessing.value && !raw.contains("[ARCHITECT]")) {
+                        // Regular logging handled elsewhere
                     }
                     success = true
                 }
@@ -147,37 +184,6 @@ class GeminiManager(
                 delay(800)
             }
         }
-    }
-
-    suspend fun extractPrompt(videoUriString: String?): String {
-        if (videoUriString == null) return "No Video"
-        _isProcessing.value = true
-        updateLog(">> INITIATING VEO REVERSE-ENGINEERING...")
-        val videoUri = Uri.parse(videoUriString)
-        val videoBytes = withContext(Dispatchers.IO) { context.contentResolver.openInputStream(videoUri)?.use { it.readBytes() } }
-        var result = ""
-        runWithRotation { model ->
-            val response = model.generateContent(content {
-                videoBytes?.let { blob("video/mp4", it) }
-                text("[TASK]: Reverse-engineer this video into a high-fidelity Veo prompt.")
-            })
-            result = response.text ?: ""
-            updateLog(">> PROMPT EXTRACTED.")
-            response
-        }
-        _isProcessing.value = false
-        return result
-    }
-
-    suspend fun chat(message: String) {
-        _isProcessing.value = true
-        updateLog("\n[USER]: $message")
-        runWithRotation { model ->
-            val response = model.generateContent(message)
-            response.text?.let { updateLog("\n[ARCHITECT]: $it") }
-            response
-        }
-        _isProcessing.value = false
     }
 
     private fun parseDraft(raw: String) {
@@ -193,6 +199,7 @@ class GeminiManager(
                 t.startsWith("TAGS:") -> _seoTags.value = t.removePrefix("TAGS:").trim()
                 t.startsWith("HT:") -> _hashtagPart.value = t.removePrefix("HT:").trim()
                 t.startsWith("DESC:") -> _descPart.value = t.removePrefix("DESC:").trim()
+                t.startsWith("HOOK:") -> _hookPart.value = t.removePrefix("HOOK:").trim()
                 t.startsWith("BIO_ANCHOR:") -> {
                     _descPart.value += "\n\n" + t.removePrefix("BIO_ANCHOR:").trim()
                 }
@@ -204,7 +211,7 @@ class GeminiManager(
     fun clearLog() {
         _uiLog.value = "[SYSTEM]: Architect Ready."; _isProcessing.value = false
         _captionOptions.value = listOf("", "", ""); _seoTags.value = ""
-        _descPart.value = ""; _hashtagPart.value = ""
+        _descPart.value = ""; _hashtagPart.value = ""; _hookPart.value = ""
     }
 
     private fun updateLog(msg: String) { _uiLog.value += "\n$msg" }

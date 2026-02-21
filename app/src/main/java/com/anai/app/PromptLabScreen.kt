@@ -25,6 +25,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PromptLabScreen(geminiManager: GeminiManager, mediaManager: MediaManager) {
     val scope = rememberCoroutineScope()
@@ -35,9 +36,24 @@ fun PromptLabScreen(geminiManager: GeminiManager, mediaManager: MediaManager) {
     var activePrompt by remember { mutableStateOf("No DNA extracted. Load video in Studio first.") }
     val promptHistory = remember { mutableStateListOf<String>() }
 
+    // THE ARCHITECT'S PROTOCOL: 300 Char Limit (Fr Fr Sweet Spot)
+    val charLimit = 300
+    val isNearLimit = activePrompt.length > (charLimit * 0.9)
+    val isAtLimit = activePrompt.length >= charLimit
+
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
         Text("VEO PROMPT LAB", style = MaterialTheme.typography.headlineSmall, color = Color(0xFFBB86FC))
-        Text("Reverse-engineer visual DNA. Edit text to add a title!", fontSize = 11.sp, color = Color.Gray)
+
+        // Dynamic Telemetry Header
+        Text(
+            text = when {
+                isAtLimit -> ">> PROTOCOL MAX REACHED: OPTIMIZED FOR VEO"
+                isNearLimit -> ">> WARNING: APPROACHING PAYLOAD CEILING"
+                else -> ">> ARCHITECT STATUS: READY FOR REVERSE-ENGINEERING"
+            },
+            fontSize = 11.sp,
+            color = if (isAtLimit) Color.Red else if (isNearLimit) Color(0xFFFFA500) else Color.Cyan
+        )
 
         Spacer(Modifier.height(16.dp))
 
@@ -45,14 +61,23 @@ fun PromptLabScreen(geminiManager: GeminiManager, mediaManager: MediaManager) {
         Card(
             modifier = Modifier.fillMaxWidth().weight(0.4f),
             colors = CardDefaults.cardColors(containerColor = Color.Black),
-            border = BorderStroke(1.dp, Color(0xFFBB86FC).copy(alpha = 0.5f))
+            border = BorderStroke(1.dp, if (isAtLimit) Color.Red else Color(0xFFBB86FC).copy(alpha = 0.5f))
         ) {
             Box(modifier = Modifier.fillMaxSize().padding(12.dp)) {
-                // We use OutlinedTextField here so you can tap and type
                 OutlinedTextField(
                     value = activePrompt,
-                    onValueChange = { activePrompt = it },
+                    onValueChange = {
+                        // Hard lockdown: Stop input at limit
+                        if (it.length <= charLimit) activePrompt = it
+                    },
                     modifier = Modifier.fillMaxSize(),
+                    label = {
+                        Text(
+                            "Blueprint Data (${activePrompt.length}/$charLimit)",
+                            fontSize = 10.sp,
+                            color = if (isAtLimit) Color.Red else Color(0xFFBB86FC)
+                        )
+                    },
                     textStyle = TextStyle(
                         color = Color.White,
                         fontFamily = FontFamily.Monospace,
@@ -60,8 +85,12 @@ fun PromptLabScreen(geminiManager: GeminiManager, mediaManager: MediaManager) {
                     ),
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedBorderColor = Color.Transparent,
-                        unfocusedBorderColor = Color.Transparent
-                    )
+                        unfocusedBorderColor = Color.Transparent,
+                        errorBorderColor = Color.Transparent,
+                        unfocusedTextColor = Color.White,
+                        focusedTextColor = Color.White
+                    ),
+                    isError = isAtLimit
                 )
 
                 if (activePrompt.length > 20) {
@@ -71,12 +100,15 @@ fun PromptLabScreen(geminiManager: GeminiManager, mediaManager: MediaManager) {
                             if (!promptHistory.contains(activePrompt)) {
                                 promptHistory.add(0, activePrompt)
                             }
-                            Toast.makeText(context, "DNA & Title Archived!", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, "DNA Archived!", Toast.LENGTH_SHORT).show()
                         },
                         modifier = Modifier.align(Alignment.BottomEnd).padding(8.dp),
-                        containerColor = Color(0xFFBB86FC)
+                        containerColor = if (isAtLimit) Color.Red else Color(0xFFBB86FC)
                     ) {
-                        Icon(Icons.Default.Check, contentDescription = "Copy")
+                        Icon(
+                            imageVector = if (isAtLimit) Icons.Default.Lock else Icons.Default.Check,
+                            contentDescription = "Save Action"
+                        )
                     }
                 }
             }
@@ -109,21 +141,26 @@ fun PromptLabScreen(geminiManager: GeminiManager, mediaManager: MediaManager) {
 
         Spacer(Modifier.height(24.dp))
 
-        Text("RECALL HISTORY", style = MaterialTheme.typography.labelLarge)
-        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            // Swapping 'History' for 'List' which is in the standard set
+            Icon(Icons.Default.List, null, modifier = Modifier.size(16.dp), tint = Color.Gray)
+            Spacer(Modifier.width(8.dp))
+            Text("RECALL HISTORY", style = MaterialTheme.typography.labelLarge, color = Color.Gray)
+        }
+        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp), color = Color.Gray.copy(alpha = 0.2f))
 
         LazyColumn(modifier = Modifier.weight(0.6f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             items(promptHistory) { historyItem ->
                 ListItem(
                     modifier = Modifier
-                        .border(1.dp, Color.Gray.copy(alpha = 0.3f), RoundedCornerShape(8.dp))
+                        .border(1.dp, Color.Gray.copy(alpha = 0.2f), RoundedCornerShape(8.dp))
                         .clickable { activePrompt = historyItem },
                     headlineContent = {
-                        Text(text = historyItem, maxLines = 2, overflow = TextOverflow.Ellipsis, fontSize = 12.sp)
+                        Text(text = historyItem, maxLines = 2, overflow = TextOverflow.Ellipsis, fontSize = 12.sp, color = Color.LightGray)
                     },
                     trailingContent = {
                         IconButton(onClick = { promptHistory.remove(historyItem) }) {
-                            Icon(Icons.Default.Delete, null, tint = Color.Red.copy(alpha = 0.6f))
+                            Icon(Icons.Default.Delete, null, tint = Color.Red.copy(alpha = 0.4f), modifier = Modifier.size(20.dp))
                         }
                     },
                     colors = ListItemDefaults.colors(containerColor = Color.Transparent)

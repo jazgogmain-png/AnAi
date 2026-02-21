@@ -13,7 +13,7 @@ import java.io.ByteArrayOutputStream
 class MediaManager(private val context: Context) {
     val player = ExoPlayer.Builder(context).build()
 
-    // Telemetry for the Matrix HUD
+    // Public variable for the Matrix HUD telemetry
     var lastFrameCount = 0
 
     fun loadVideo(uri: Uri) {
@@ -23,8 +23,9 @@ class MediaManager(private val context: Context) {
     }
 
     /**
-     * THE SQUEEZER: Dynamic 1FPS logic.
-     * Extracts a cinematic storyboard to keep AI analysis fast and under API limits.
+     * THE SQUEEZER (150 PROTOCOL):
+     * Extracts a high-density storyboard for precision "Golden Hook" detection.
+     * Stays under 20MB while providing nearly 18fps for short videos.
      */
     suspend fun squeezeForAI(
         uri: Uri,
@@ -36,8 +37,8 @@ class MediaManager(private val context: Context) {
             val stream = ByteArrayOutputStream()
             val durationMs = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLong() ?: 0L
 
-            // GOLDILOCKS ZONE: 1 frame per second, capped at 100 frames (~6MB total)
-            lastFrameCount = (durationMs / 1000).toInt().coerceIn(3, 100)
+            // STATIC 150: High-fidelity vision across all video lengths
+            lastFrameCount = 150
 
             val totalUs = durationMs * 1000
             val intervalUs = if (lastFrameCount > 1) totalUs / (lastFrameCount - 1) else 0L
@@ -45,7 +46,7 @@ class MediaManager(private val context: Context) {
             for (i in 0 until lastFrameCount) {
                 val timeUs = i * intervalUs
 
-                // Report progress to the Matrix
+                // Report real-time telemetry back to GeminiManager
                 onProgress(i + 1, lastFrameCount)
 
                 val bitmap = try {
@@ -55,11 +56,11 @@ class MediaManager(private val context: Context) {
                 }
 
                 bitmap?.let {
-                    // Downscale to 480p (Perfect for G3's vision)
+                    // Downscale to 480p (Portrait: 480x854)
                     val scaled = Bitmap.createScaledBitmap(it, 480, 854, false)
-                    // 75% quality JPEGs balance detail and speed
+                    // 75% quality JPEGs balance visual soul and upload speed
                     scaled.compress(Bitmap.CompressFormat.JPEG, 75, stream)
-                    it.recycle() // Immediate memory cleanup
+                    it.recycle() // Critical for avoiding OutOfMemory on 150 frames
                 }
             }
             stream.toByteArray()
@@ -68,7 +69,7 @@ class MediaManager(private val context: Context) {
         } finally {
             try {
                 retriever.release()
-            } catch (e: Exception) { /* Already released */ }
+            } catch (e: Exception) { /* Handled */ }
         }
     }
 
