@@ -24,12 +24,9 @@ class GeminiManager(
     private val _isProcessing = MutableStateFlow(false)
     val isProcessing = _isProcessing.asStateFlow()
 
+    // UI Data States
     private val _captionOptions = MutableStateFlow(listOf("", "", ""))
     val captionOptions = _captionOptions.asStateFlow()
-    private val _overlayText = MutableStateFlow("")
-    val overlayText = _overlayText.asStateFlow()
-    private val _musicTip = MutableStateFlow("")
-    val musicTip = _musicTip.asStateFlow()
     private val _seoTags = MutableStateFlow("")
     val seoTags = _seoTags.asStateFlow()
     private val _descPart = MutableStateFlow("")
@@ -63,7 +60,7 @@ class GeminiManager(
         _isProcessing.value = true
 
         val videoBytes = withContext(Dispatchers.IO) {
-            updateLog(">> CRUSHING PIXELS FOR $platform...")
+            updateLog(">> INITIALIZING PIXEL CRUSHER...")
             context.contentResolver.openInputStream(videoUri)?.use { it.readBytes() }
         }
 
@@ -71,23 +68,35 @@ class GeminiManager(
             model.generateContent(content {
                 videoBytes?.let { blob("video/mp4", it) }
                 text("""
-                    [SOUL]: $personaInstructions
-                    [ENGINE]: $engineInstructions
-                    [PLATFORM]: $platform
-                    [VIRAL BLACKLIST]: viral, fyp, foryou, trending, explore, shorts.
-                    [HASHTAG FORMULA]: 2 niche + 2 format + 1 context.
-                    [FORMAT]: $engineTemplate
+                    [SYSTEM ROLE]: You are the ANAI Architect.
+                    
+                    [SOUL DNA - MANDATORY]: 
+                    $personaInstructions
+                    
+                    [ENGINE LOGIC]: 
+                    $engineInstructions
+                    
+                    [STRICT OUTPUT RULES]:
+                    1. The 'DESC' field MUST contain the STATIC BIO provided in the [SOUL DNA].
+                    2. Start the 'DESC' with one unique sentence based on the video analysis, then append the full STATIC BIO.
+                    3. Do not summarize the bio. Use it EXACTLY as written.
+                    4. Merge Static Hashtags from Soul with 2 dynamic ones.
+                    5. Ensure Titles (C1, C2, C3) include 1-2 relevant emojis at the end.
+                    
+                    [FORMAT TEMPLATE]: 
+                    $engineTemplate
                 """.trimIndent())
             })
         }
         _isProcessing.value = false
     }
 
+    // PERSONA FORGE
     suspend fun forgePersona(description: String): String {
         _isProcessing.value = true
         var result = ""
         runWithRotation { model ->
-            val response = model.generateContent("Turn this into a structured soul DNA sheet for an AI content system: $description")
+            val response = model.generateContent("Turn this into a structured Soul DNA sheet with sections for BIO_ANCHOR, STATIC_HT, STATIC_TAGS and TONE: $description")
             result = response.text ?: "Forge Failed"
             response
         }
@@ -135,12 +144,14 @@ class GeminiManager(
                     if (raw.contains("###ARCHITECT_DRAFT###")) {
                         _uiLog.value += "\n\n$raw"
                         parseDraft(raw)
+                    } else if (_isProcessing.value) {
+                        _uiLog.value += "\n\n$raw"
                     }
                     success = true
                 }
             } catch (e: Exception) {
                 attempt++
-                updateLog(">> ROTATING...")
+                updateLog(">> ROTATING NODE...")
                 delay(800)
             }
         }
@@ -156,11 +167,13 @@ class GeminiManager(
                 t.startsWith("C1:") -> caps[0] = t.removePrefix("C1:").trim()
                 t.startsWith("C2:") -> caps[1] = t.removePrefix("C2:").trim()
                 t.startsWith("C3:") -> caps[2] = t.removePrefix("C3:").trim()
-                t.startsWith("OV:") -> _overlayText.value = t.removePrefix("OV:").trim()
-                t.startsWith("MU:") -> _musicTip.value = t.removePrefix("MU:").trim()
                 t.startsWith("TAGS:") -> _seoTags.value = t.removePrefix("TAGS:").trim()
-                t.startsWith("DESC:") -> _descPart.value = t.removePrefix("DESC:").trim()
                 t.startsWith("HT:") -> _hashtagPart.value = t.removePrefix("HT:").trim()
+                t.startsWith("DESC:") -> _descPart.value = t.removePrefix("DESC:").trim()
+                // The new catch for the bio anchor block
+                t.startsWith("BIO_ANCHOR:") -> {
+                    _descPart.value += "\n\n" + t.removePrefix("BIO_ANCHOR:").trim()
+                }
             }
         }
         _captionOptions.value = caps
@@ -168,8 +181,8 @@ class GeminiManager(
 
     fun clearLog() {
         _uiLog.value = "[SYSTEM]: Architect Ready."; _isProcessing.value = false
-        _captionOptions.value = listOf("", "", ""); _overlayText.value = ""
-        _musicTip.value = ""; _seoTags.value = ""; _descPart.value = ""; _hashtagPart.value = ""
+        _captionOptions.value = listOf("", "", ""); _seoTags.value = ""
+        _descPart.value = ""; _hashtagPart.value = ""
     }
 
     private fun updateLog(msg: String) { _uiLog.value += msg }

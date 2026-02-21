@@ -63,10 +63,9 @@ fun DashboardScreen(
         }
     }
 
+    // --- OBSERVE DATA ---
     val isProcessing by geminiManager.isProcessing.collectAsState()
     val captionOptions by geminiManager.captionOptions.collectAsState()
-    val overlayText by geminiManager.overlayText.collectAsState()
-    val musicTip by geminiManager.musicTip.collectAsState()
     val seoTags by geminiManager.seoTags.collectAsState()
     val descPart by geminiManager.descPart.collectAsState()
     val hashtagPart by geminiManager.hashtagPart.collectAsState()
@@ -94,6 +93,7 @@ fun DashboardScreen(
             }
         }
 
+        // --- SOUL & ENGINE SELECTORS ---
         item {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedCard(onClick = { showPersonaSheet = true }, modifier = Modifier.fillMaxWidth()) {
@@ -105,25 +105,30 @@ fun DashboardScreen(
                 }
                 FlowRow(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     engines.forEach { engine ->
-                        FilterChip(selected = selectedEngine?.id == engine.id, onClick = { selectedEngine = engine }, label = { Text(engine.name, fontSize = 10.sp) })
+                        FilterChip(
+                            selected = selectedEngine?.id == engine.id,
+                            onClick = { selectedEngine = engine },
+                            label = { Text(engine.name, fontSize = 10.sp) }
+                        )
                     }
                 }
             }
         }
 
+        // --- DRAFT STATION (TITLES) ---
         item {
             Column(modifier = Modifier.fillMaxWidth().border(1.dp, MaterialTheme.colorScheme.outline, MaterialTheme.shapes.medium).padding(12.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text("Draft Station", style = MaterialTheme.typography.labelLarge)
                     Spacer(Modifier.weight(1f))
-                    listOf("SHK", "REL", "CHS").forEachIndexed { index, label ->
+                    listOf("V1", "V2", "V3").forEachIndexed { index, label ->
                         InputChip(selected = activeCaptionIndex == index, onClick = { activeCaptionIndex = index }, label = { Text(label, fontSize = 9.sp) }, modifier = Modifier.padding(start = 4.dp))
                     }
                 }
                 val currentCap = if (captionOptions.size > activeCaptionIndex) captionOptions[activeCaptionIndex] else ""
                 OutlinedTextField(
                     value = currentCap, onValueChange = {}, readOnly = true,
-                    modifier = Modifier.fillMaxWidth().heightIn(min = 80.dp).pointerInput(Unit) {
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 60.dp).pointerInput(Unit) {
                         detectTapGestures(onDoubleTap = { if (currentCap.isNotBlank()) { clipboardManager.setText(AnnotatedString(currentCap)); Toast.makeText(context, "Copied!", Toast.LENGTH_SHORT).show() } })
                     },
                     textStyle = MaterialTheme.typography.bodyMedium
@@ -131,29 +136,68 @@ fun DashboardScreen(
             }
         }
 
-        // --- DUMB DESCRIPTION BOX (Strictly what G3 sends) ---
-        if (descPart.isNotBlank()) {
+        // --- REFINED DESCRIPTION (Merged with Hashtags & Static Bio) ---
+        if (descPart.isNotBlank() || selectedPlatform?.name?.contains("YouTube", true) == true) {
             item {
+                // EXPLICIT MERGE LOGIC: We extract the BIO_ANCHOR directly from the persona instructions
+                val rawInstructions = selectedPersona?.instructions ?: ""
+                val extractedBio = if (rawInstructions.contains("BIO_ANCHOR:")) {
+                    rawInstructions.substringAfter("BIO_ANCHOR:").substringBefore("STATIC_HT:").trim()
+                } else ""
+
+                val combinedContent = buildString {
+                    append(descPart) // G3's unique hook
+                    if (extractedBio.isNotBlank()) {
+                        append("\n\n")
+                        append(extractedBio) // Your mandatory bio
+                    }
+                    if (hashtagPart.isNotBlank()) {
+                        append("\n\n")
+                        append(hashtagPart) // The hashtag stack
+                    }
+                }
+
                 Column(modifier = Modifier.fillMaxWidth().border(1.dp, Color.Cyan.copy(alpha = 0.5f), MaterialTheme.shapes.medium).padding(12.dp)) {
                     Text("Architect Description", style = MaterialTheme.typography.labelLarge, color = Color.Cyan)
-                    OutlinedTextField(value = descPart, onValueChange = {}, readOnly = true, modifier = Modifier.fillMaxWidth().heightIn(min = 100.dp).pointerInput(Unit) {
-                        detectTapGestures(onDoubleTap = { clipboardManager.setText(AnnotatedString(descPart)); Toast.makeText(context, "Copied!", Toast.LENGTH_SHORT).show() })
-                    })
+                    OutlinedTextField(
+                        value = combinedContent,
+                        onValueChange = {},
+                        readOnly = true,
+                        modifier = Modifier.fillMaxWidth().heightIn(min = 100.dp).pointerInput(Unit) {
+                            detectTapGestures(onDoubleTap = {
+                                clipboardManager.setText(AnnotatedString(combinedContent))
+                                Toast.makeText(context, "Full Description Copied!", Toast.LENGTH_SHORT).show()
+                            })
+                        },
+                        textStyle = MaterialTheme.typography.bodyMedium
+                    )
                 }
             }
         }
 
-        if (hashtagPart.isNotBlank()) {
+        // --- TAG CHIPS (Tappable individual items) ---
+        if (seoTags.isNotBlank() || selectedPlatform?.name?.contains("YouTube", true) == true) {
             item {
-                Column(modifier = Modifier.fillMaxWidth().border(1.dp, Color.Magenta.copy(alpha = 0.5f), MaterialTheme.shapes.medium).padding(12.dp)) {
-                    Text("Viral Hashtags", style = MaterialTheme.typography.labelLarge, color = Color.Magenta)
-                    OutlinedTextField(value = hashtagPart, onValueChange = {}, readOnly = true, modifier = Modifier.fillMaxWidth().pointerInput(Unit) {
-                        detectTapGestures(onDoubleTap = { clipboardManager.setText(AnnotatedString(hashtagPart)); Toast.makeText(context, "Copied!", Toast.LENGTH_SHORT).show() })
-                    })
+                Column(modifier = Modifier.fillMaxWidth().border(1.dp, Color.Yellow.copy(alpha = 0.5f), MaterialTheme.shapes.medium).padding(12.dp)) {
+                    Text("Metadata & Tags (Tap to Copy)", style = MaterialTheme.typography.labelLarge, color = Color.Yellow)
+                    Spacer(Modifier.height(8.dp))
+                    FlowRow(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        seoTags.split(",").filter { it.isNotBlank() }.forEach { tag ->
+                            val cleanTag = tag.trim()
+                            SuggestionChip(
+                                onClick = {
+                                    clipboardManager.setText(AnnotatedString(cleanTag))
+                                    Toast.makeText(context, "Copied: $cleanTag", Toast.LENGTH_SHORT).show()
+                                },
+                                label = { Text(cleanTag, fontSize = 10.sp) }
+                            )
+                        }
+                    }
                 }
             }
         }
 
+        // --- EXECUTE BUTTON ---
         item {
             Button(
                 onClick = {
@@ -168,7 +212,7 @@ fun DashboardScreen(
                 else Text("EXECUTE BLUEPRINT SCAN", fontWeight = FontWeight.Bold)
             }
         }
-        item { Spacer(Modifier.height(16.dp)) }
+        item { Spacer(Modifier.height(32.dp)) }
     }
 
     if (showPersonaSheet) {
