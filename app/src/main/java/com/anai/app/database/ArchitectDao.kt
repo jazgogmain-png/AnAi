@@ -52,16 +52,18 @@ interface ArchitectDao {
     @Query("SELECT * FROM blueprint_history ORDER BY timestamp DESC")
     fun getAllHistory(): Flow<List<BlueprintEntity>>
 
-    // Your original Winners Circle
     @Query("SELECT * FROM blueprint_history WHERE isStarred = 1 ORDER BY timestamp DESC")
     fun getWinnersCircle(): Flow<List<BlueprintEntity>>
 
-    // NEW: Specifically for the Vibe Injector (Top 5 recent starred items)
     @Query("SELECT * FROM blueprint_history WHERE isStarred = 1 ORDER BY timestamp DESC LIMIT 5")
     fun getRecentVibes(): Flow<List<BlueprintEntity>>
 
     @Query("UPDATE blueprint_history SET isStarred = :starred WHERE id = :id")
     suspend fun toggleStar(id: Int, starred: Boolean)
+
+    // NEW: Rename the "Aura" or "Friendly Alias" for organization
+    @Query("UPDATE blueprint_history SET personaName = :newName WHERE id = :id")
+    suspend fun updateBlueprintAlias(id: Int, newName: String)
 
     @Query("DELETE FROM blueprint_history WHERE id = :id")
     suspend fun deleteBlueprint(id: Int)

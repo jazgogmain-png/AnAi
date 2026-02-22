@@ -5,6 +5,7 @@ import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -27,6 +28,7 @@ import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.anai.app.database.ArchitectDao
@@ -52,11 +54,12 @@ fun DashboardScreen(
     val personas by dao.getAllPersonas().collectAsState(initial = emptyList())
     val engines by dao.getAllEngines().collectAsState(initial = emptyList())
 
-    // --- UI STATE ---
     var videoUriString by rememberSaveable { mutableStateOf<String?>(null) }
     var selectedPersona by remember { mutableStateOf<PersonaEntity?>(null) }
     var selectedEngine by remember { mutableStateOf<EngineEntity?>(null) }
     var activeCaptionIndex by rememberSaveable { mutableIntStateOf(0) }
+
+    val isTikTok = selectedEngine?.name?.contains("TikTok", ignoreCase = true) ?: false
 
     LaunchedEffect(selectedPlatform, engines, personas) {
         if (selectedPlatform != null) {
@@ -77,9 +80,7 @@ fun DashboardScreen(
     val videoPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         uri?.let {
             try {
-                context.contentResolver.takePersistableUriPermission(
-                    it, Intent.FLAG_GRANT_READ_URI_PERMISSION
-                )
+                context.contentResolver.takePersistableUriPermission(it, Intent.FLAG_GRANT_READ_URI_PERMISSION)
             } catch (e: Exception) {}
             videoUriString = it.toString()
             mediaManager.loadVideo(it)
@@ -92,7 +93,7 @@ fun DashboardScreen(
 
         item {
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                Text(text = if (selectedPlatform == null) "Master Studio" else "${selectedPlatform.name} Studio", style = MaterialTheme.typography.labelLarge, color = Color.Gray)
+                Text(text = if (selectedEngine != null) "${selectedEngine?.name} Studio" else "Master Studio", style = MaterialTheme.typography.labelLarge, color = Color.Gray)
                 Row {
                     if (videoUriString == null) {
                         IconButton(onClick = { videoPicker.launch(arrayOf("video/*")) }) {
@@ -100,11 +101,7 @@ fun DashboardScreen(
                         }
                     }
                     IconButton(onClick = { videoUriString = null; geminiManager.clearLog() }) {
-                        Icon(
-                            imageVector = Icons.Filled.Refresh,
-                            contentDescription = "Refresh",
-                            modifier = Modifier.size(20.dp)
-                        )
+                        Icon(imageVector = Icons.Filled.Refresh, contentDescription = "Refresh", modifier = Modifier.size(20.dp))
                     }
                 }
             }
@@ -131,69 +128,96 @@ fun DashboardScreen(
             }
         }
 
+        // --- BOX 1: THE VERBAL (V1/V2/V3 + HT) ---
         item {
             Column(modifier = Modifier.fillMaxWidth().border(1.dp, MaterialTheme.colorScheme.outline, MaterialTheme.shapes.medium).padding(12.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("Draft Station", style = MaterialTheme.typography.labelLarge)
+                    Text(if (isTikTok) "TikTok Verbal Block" else "Draft Station", style = MaterialTheme.typography.labelLarge)
                     Spacer(Modifier.weight(1f))
                     listOf("V1", "V2", "V3").forEachIndexed { index, label ->
-                        InputChip(selected = activeCaptionIndex == index, onClick = { activeCaptionIndex = index }, label = { Text(label, fontSize = 9.sp) }, modifier = Modifier.padding(start = 4.dp))
+                        InputChip(
+                            selected = activeCaptionIndex == index,
+                            onClick = { activeCaptionIndex = index },
+                            label = { Text(label, fontSize = 9.sp) },
+                            modifier = Modifier.padding(start = 4.dp)
+                        )
                     }
                 }
+
                 val currentCap = if (captionOptions.size > activeCaptionIndex) captionOptions[activeCaptionIndex] else ""
+                val fullVerbalBlock = if (isTikTok && hashtagPart.isNotBlank()) "$currentCap\n\n$hashtagPart" else currentCap
+
                 OutlinedTextField(
-                    value = currentCap, onValueChange = {}, readOnly = true,
-                    modifier = Modifier.fillMaxWidth().heightIn(min = 60.dp).pointerInput(Unit) {
-                        detectTapGestures(onDoubleTap = { if (currentCap.isNotBlank()) { clipboardManager.setText(AnnotatedString(currentCap)); Toast.makeText(context, "Copied!", Toast.LENGTH_SHORT).show() } })
+                    value = fullVerbalBlock, onValueChange = {}, readOnly = true,
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 80.dp).pointerInput(Unit) {
+                        detectTapGestures(onDoubleTap = {
+                            if (fullVerbalBlock.isNotBlank()) {
+                                clipboardManager.setText(AnnotatedString(fullVerbalBlock))
+                                Toast.makeText(context, "Verbal Block Copied!", Toast.LENGTH_SHORT).show()
+                            }
+                        })
                     },
                     textStyle = MaterialTheme.typography.bodyMedium
                 )
             }
         }
 
-        if (descPart.isNotBlank() || hookPart.isNotBlank() || auraPart.isNotBlank()) {
-            item {
-                val combinedContent = buildString {
-                    if (hookPart.isNotBlank()) append("🎯 GOLDEN HOOK: $hookPart\n")
-                    if (auraPart.isNotBlank()) append("✨ AURA SCAN: $auraPart\n")
-                    if (hookPart.isNotBlank() || auraPart.isNotBlank()) append("\n---\n\n")
-                    append(descPart)
-                    if (hashtagPart.isNotBlank()) append("\n\n$hashtagPart")
-                }
-
+        // --- BOX 2: VISUAL STRATEGY (AURA & HOOK) ---
+        item {
+            AnimatedVisibility(visible = auraPart.isNotBlank() || hookPart.isNotBlank()) {
                 Column(modifier = Modifier.fillMaxWidth().border(1.dp, Color.Cyan.copy(alpha = 0.5f), MaterialTheme.shapes.medium).padding(12.dp)) {
-                    Text("Architect Audit & Description", style = MaterialTheme.typography.labelLarge, color = Color.Cyan)
-                    OutlinedTextField(
-                        value = combinedContent,
-                        onValueChange = {},
-                        readOnly = true,
-                        modifier = Modifier.fillMaxWidth().heightIn(min = 100.dp).pointerInput(Unit) {
-                            detectTapGestures(onDoubleTap = {
-                                clipboardManager.setText(AnnotatedString(combinedContent))
-                                Toast.makeText(context, "Full Blueprint Copied!", Toast.LENGTH_SHORT).show()
-                            })
-                        },
-                        textStyle = MaterialTheme.typography.bodyMedium
-                    )
+                    Text("Visual Strategy", style = MaterialTheme.typography.labelLarge, color = Color.Cyan)
+                    if (hookPart.isNotBlank()) {
+                        Text("🎯 GOLDEN HOOK: $hookPart", fontSize = 12.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 8.dp))
+                    }
+                    if (auraPart.isNotBlank()) {
+                        Text("✨ AURA PROFILE: $auraPart", fontSize = 12.sp, color = Color.LightGray, modifier = Modifier.padding(top = 4.dp))
+                    }
                 }
             }
         }
 
-        if (seoTags.isNotBlank()) {
-            item {
-                Column(modifier = Modifier.fillMaxWidth().border(1.dp, Color.Yellow.copy(alpha = 0.5f), MaterialTheme.shapes.medium).padding(12.dp)) {
-                    Text("Metadata & Tags (Tap to Copy)", style = MaterialTheme.typography.labelLarge, color = Color.Yellow)
-                    Spacer(Modifier.height(8.dp))
-                    FlowRow(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        seoTags.split(",").filter { it.isNotBlank() }.forEach { tag ->
-                            val cleanTag = tag.trim()
-                            SuggestionChip(
-                                onClick = {
-                                    clipboardManager.setText(AnnotatedString(cleanTag))
-                                    Toast.makeText(context, "Copied: $cleanTag", Toast.LENGTH_SHORT).show()
-                                },
-                                label = { Text(cleanTag, fontSize = 10.sp) }
+        // --- BOX 3: PRODUCTION (SELECTABLE TEXT) ---
+        item {
+            AnimatedVisibility(visible = descPart.isNotBlank() || seoTags.isNotBlank()) {
+                if (isTikTok) {
+                    val productionNotes = buildString {
+                        if (descPart.isNotBlank()) append(descPart)
+                        if (descPart.isNotBlank() && seoTags.isNotBlank()) append("\n\n")
+                        if (seoTags.isNotBlank()) append(seoTags)
+                    }
+
+                    Column(modifier = Modifier.fillMaxWidth().border(1.dp, Color.Magenta.copy(alpha = 0.5f), MaterialTheme.shapes.medium).padding(12.dp)) {
+                        Text("Production (Overlay & Music)", style = MaterialTheme.typography.labelLarge, color = Color.Magenta)
+                        Spacer(Modifier.height(8.dp))
+                        // Changed to OutlinedTextField for specific text selection/highlighting
+                        OutlinedTextField(
+                            value = productionNotes,
+                            onValueChange = {},
+                            readOnly = true,
+                            modifier = Modifier.fillMaxWidth().heightIn(min = 60.dp),
+                            textStyle = MaterialTheme.typography.bodySmall,
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = Color.Transparent,
+                                unfocusedBorderColor = Color.Transparent
                             )
+                        )
+                    }
+                } else {
+                    // YOUTUBE TAG CHIPS
+                    Column(modifier = Modifier.fillMaxWidth().border(1.dp, Color.Yellow.copy(alpha = 0.5f), MaterialTheme.shapes.medium).padding(12.dp)) {
+                        Text("SEO Metadata Tags", style = MaterialTheme.typography.labelLarge, color = Color.Yellow)
+                        Spacer(Modifier.height(8.dp))
+                        FlowRow(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            seoTags.split(",").filter { it.isNotBlank() }.forEach { tag ->
+                                SuggestionChip(
+                                    onClick = {
+                                        clipboardManager.setText(AnnotatedString(tag.trim()))
+                                        Toast.makeText(context, "Tag Copied!", Toast.LENGTH_SHORT).show()
+                                    },
+                                    label = { Text(tag.trim(), fontSize = 10.sp) }
+                                )
+                            }
                         }
                     }
                 }
@@ -205,7 +229,7 @@ fun DashboardScreen(
                 Button(
                     onClick = {
                         scope.launch {
-                            geminiManager.analyzeVideo("", selectedPlatform?.name ?: "Master", selectedPersona?.name, selectedPersona?.instructions, videoUriString, selectedEngine?.instructions, selectedEngine?.draftTemplate)
+                            geminiManager.analyzeVideo("", selectedEngine?.name ?: "Master", selectedPersona?.name, selectedPersona?.instructions, videoUriString, selectedEngine?.instructions, selectedEngine?.draftTemplate)
                         }
                     },
                     modifier = Modifier.weight(1f).height(56.dp),
@@ -218,13 +242,11 @@ fun DashboardScreen(
                 IconButton(
                     onClick = {
                         scope.launch {
-                            val thumbUri = videoUriString?.let { mediaManager.snatchThumbnail(Uri.parse(it)) }
                             val currentCap = if (captionOptions.size > activeCaptionIndex) captionOptions[activeCaptionIndex] else ""
                             val blueprint = BlueprintEntity(
                                 videoUri = videoUriString ?: "",
-                                thumbnailUri = thumbUri,
                                 personaName = selectedPersona?.name ?: "Unknown",
-                                platform = selectedPlatform?.name ?: "Master",
+                                platform = selectedEngine?.name ?: "Master",
                                 titleUsed = currentCap,
                                 hookTimestamp = hookPart,
                                 auraProfile = auraPart,
@@ -235,7 +257,7 @@ fun DashboardScreen(
                         }
                     },
                     modifier = Modifier.height(56.dp).width(56.dp).border(1.dp, Color.Yellow.copy(alpha = 0.5f), MaterialTheme.shapes.medium),
-                    enabled = descPart.isNotBlank() && !isProcessing
+                    enabled = (descPart.isNotBlank() || hookPart.isNotBlank()) && !isProcessing
                 ) {
                     Icon(Icons.Default.Star, contentDescription = "Vault", tint = Color.Yellow)
                 }

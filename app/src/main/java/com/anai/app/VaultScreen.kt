@@ -3,12 +3,14 @@ package com.anai.app
 import android.widget.Toast
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.Share
@@ -23,6 +25,7 @@ import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow // <-- FIXED: Added this import
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
@@ -35,118 +38,135 @@ import java.util.*
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun VaultScreen(dao: ArchitectDao) {
-    val history by dao.getAllHistory().collectAsState(initial = emptyList())
     val scope = rememberCoroutineScope()
+    val blueprints by dao.getAllHistory().collectAsState(initial = emptyList())
     val context = LocalContext.current
-    val clipboard = LocalClipboardManager.current
+    val clipboardManager = LocalClipboardManager.current
+
+    // Rename Dialog State
+    var showRenameDialog by remember { mutableStateOf(false) }
+    var blueprintToRename by remember { mutableStateOf<BlueprintEntity?>(null) }
+    var newNameText by remember { mutableStateOf("") }
 
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
-        Text(
-            text = "SUCCESS VAULT",
-            style = MaterialTheme.typography.headlineMedium,
-            fontWeight = FontWeight.Bold,
-            color = Color.Cyan
-        )
-        Text(
-            text = "Archived viral blueprints and visual auras.",
-            style = MaterialTheme.typography.bodySmall,
-            color = Color.Gray
-        )
+        Text("SUCCESS VAULT", style = MaterialTheme.typography.headlineSmall, color = Color.Cyan)
+        Text("Archived winning DNA and viral blueprints.", fontSize = 11.sp, color = Color.Gray)
 
         Spacer(Modifier.height(16.dp))
 
-        if (history.isEmpty()) {
-            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Text("Vault Empty. Star a scan to begin.", color = Color.DarkGray)
-            }
-        } else {
-            LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                items(history) { blueprint ->
-                    VaultCard(
-                        blueprint = blueprint,
-                        onDelete = { scope.launch { dao.deleteBlueprint(blueprint.id) } },
-                        onToggleStar = { scope.launch { dao.toggleStar(blueprint.id, !blueprint.isStarred) } },
-                        onCopy = {
-                            clipboard.setText(AnnotatedString(blueprint.fullDescription))
-                            Toast.makeText(context, "Description Copied!", Toast.LENGTH_SHORT).show()
-                        }
-                    )
-                }
+        LazyColumn(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            items(blueprints) { blueprint ->
+                BlueprintCard(
+                    blueprint = blueprint,
+                    onDelete = { scope.launch { dao.deleteBlueprint(blueprint.id) } },
+                    onStar = { scope.launch { dao.toggleStar(blueprint.id, !blueprint.isStarred) } },
+                    onRename = {
+                        blueprintToRename = blueprint
+                        newNameText = blueprint.personaName
+                        showRenameDialog = true
+                    },
+                    onCopy = {
+                        val fullBio = "TITLE: ${blueprint.titleUsed}\nHOOK: ${blueprint.hookTimestamp}\nAURA: ${blueprint.auraProfile}\n\n${blueprint.fullDescription}"
+                        clipboardManager.setText(AnnotatedString(fullBio))
+                        Toast.makeText(context, "Blueprint Copied!", Toast.LENGTH_SHORT).show()
+                    }
+                )
             }
         }
+    }
+
+    // --- THE RENAME DIALOG ---
+    if (showRenameDialog && blueprintToRename != null) {
+        AlertDialog(
+            onDismissRequest = { showRenameDialog = false },
+            title = { Text("Rename Aura/Alias", fontSize = 16.sp) },
+            text = {
+                OutlinedTextField(
+                    value = newNameText,
+                    onValueChange = { newNameText = it },
+                    label = { Text("Friendly Name") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    scope.launch {
+                        dao.updateBlueprintAlias(blueprintToRename!!.id, newNameText)
+                        showRenameDialog = false
+                        Toast.makeText(context, "Alias Updated!", Toast.LENGTH_SHORT).show()
+                    }
+                }) { Text("SAVE", color = Color.Cyan) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showRenameDialog = false }) { Text("CANCEL") }
+            }
+        )
     }
 }
 
 @Composable
-fun VaultCard(
+fun BlueprintCard(
     blueprint: BlueprintEntity,
     onDelete: () -> Unit,
-    onToggleStar: () -> Unit,
+    onStar: () -> Unit,
+    onRename: () -> Unit,
     onCopy: () -> Unit
 ) {
-    val date = SimpleDateFormat("MMM dd, HH:mm", Locale.getDefault()).format(Date(blueprint.timestamp))
+    val dateStr = remember(blueprint.timestamp) {
+        val sdf = SimpleDateFormat("MMM dd, HH:mm", Locale.getDefault())
+        sdf.format(Date(blueprint.timestamp))
+    }
 
-    OutlinedCard(
+    Card(
         modifier = Modifier.fillMaxWidth(),
-        border = if (blueprint.isStarred) BorderStroke(1.dp, Color.Yellow) else BorderStroke(1.dp, Color.Gray.copy(alpha = 0.5f))
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)),
+        border = BorderStroke(1.dp, if (blueprint.isStarred) Color.Yellow.copy(alpha = 0.5f) else Color.Gray.copy(alpha = 0.2f))
     ) {
-        Column(modifier = Modifier.padding(12.dp)) {
-            // --- HEADER ROW (Persona & Date) ---
+        Column(modifier = Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                if (blueprint.thumbnailUri != null) {
-                    AsyncImage(
-                        model = blueprint.thumbnailUri,
-                        contentDescription = null,
-                        modifier = Modifier
-                            .size(50.dp)
-                            .clip(RoundedCornerShape(8.dp))
-                            .border(1.dp, Color.Gray.copy(alpha = 0.3f), RoundedCornerShape(8.dp)),
-                        contentScale = ContentScale.Crop
-                    )
-                    Spacer(Modifier.width(12.dp))
-                }
+                // THUMBNAIL
+                AsyncImage(
+                    model = blueprint.thumbnailUri,
+                    contentDescription = null,
+                    modifier = Modifier.size(60.dp).clip(RoundedCornerShape(8.dp)).border(1.dp, Color.Gray.copy(alpha = 0.5f), RoundedCornerShape(8.dp)),
+                    contentScale = ContentScale.Crop
+                )
+
+                Spacer(Modifier.width(12.dp))
 
                 Column(modifier = Modifier.weight(1f)) {
-                    Text(text = blueprint.personaName, fontWeight = FontWeight.Bold, color = Color.Cyan)
-                    Text(text = "$date • ${blueprint.platform}", fontSize = 10.sp, color = Color.Gray)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = blueprint.personaName,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 14.sp,
+                            color = if (blueprint.isStarred) Color.Yellow else Color.White
+                        )
+                        IconButton(onClick = onRename, modifier = Modifier.size(24.dp)) {
+                            Icon(Icons.Default.Edit, null, modifier = Modifier.size(14.dp), tint = Color.Cyan.copy(alpha = 0.6f))
+                        }
+                    }
+                    Text(text = "${blueprint.platform} • $dateStr", fontSize = 10.sp, color = Color.Gray)
                 }
 
-                IconButton(onClick = onToggleStar) {
+                IconButton(onClick = onStar) {
                     Icon(
                         imageVector = if (blueprint.isStarred) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-                        contentDescription = null,
+                        contentDescription = "Star",
                         tint = if (blueprint.isStarred) Color.Yellow else Color.Gray
                     )
                 }
             }
 
-            // --- TITLE / CAPTION ---
-            if (blueprint.titleUsed.isNotBlank()) {
-                Text(
-                    text = blueprint.titleUsed,
-                    style = MaterialTheme.typography.bodyLarge,
-                    modifier = Modifier.padding(top = 12.dp, bottom = 4.dp),
-                    fontWeight = FontWeight.Medium
-                )
-            }
+            Spacer(Modifier.height(12.dp))
 
-            HorizontalDivider(
-                modifier = Modifier.padding(vertical = 8.dp),
-                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
-            )
-
-            // --- REFINED AUDIT SECTION (Full Width, No Collapse) ---
+            // --- DATA PREVIEW ---
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Column {
-                    Text("🎯 GOLDEN HOOK", fontSize = 9.sp, fontWeight = FontWeight.Bold, color = Color.Yellow)
-                    Text(
-                        text = blueprint.hookTimestamp,
-                        fontSize = 12.sp,
-                        lineHeight = 16.sp,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
+                    Text("📽️ CAPTION USED", fontSize = 9.sp, fontWeight = FontWeight.Bold, color = Color.Gray)
+                    Text(blueprint.titleUsed, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
-
                 Column {
                     Text("✨ AURA PROFILE", fontSize = 9.sp, fontWeight = FontWeight.Bold, color = Color.Cyan)
                     Text(
