@@ -1,5 +1,6 @@
 package com.anai.app
 
+import android.net.Uri
 import android.widget.Toast
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.border
@@ -21,12 +22,18 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.anai.app.database.ArchitectDao
 import com.anai.app.database.BlueprintEntity
 import kotlinx.coroutines.launch
+
+// 🛠️ THE DELEGATE ANCHORS
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -36,24 +43,53 @@ fun PromptLabScreen(geminiManager: GeminiManager, mediaManager: MediaManager, da
     val context = LocalContext.current
 
     val isProcessing by geminiManager.isProcessing.collectAsState()
-    var activePrompt by remember { mutableStateOf("Ready to extract cinematic DNA...") }
-    val promptHistory = remember { mutableStateListOf<String>() }
+    val auraPart by geminiManager.auraPart.collectAsState()
 
+    // 🏛️ VAULT COLLECTION: Synced with your dao.getAllHistory()
+    val savedBlueprints by dao.getAllHistory().collectAsState(initial = emptyList())
+
+    var activePrompt by remember { mutableStateOf("Ready to extract cinematic DNA...") }
     val charLimit = 600
-    val isAtLimit = activePrompt.length >= charLimit
 
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
             Text("PROMPT LAB", style = MaterialTheme.typography.headlineSmall, color = Color.Cyan)
 
-            // THE SAVE BUTTON
-            IconButton(onClick = {
-                if (activePrompt.isNotBlank()) {
-                    promptHistory.add(0, activePrompt)
-                    Toast.makeText(context, "Prompt Saved!", Toast.LENGTH_SHORT).show()
+            Row {
+                // 💉 THE BRIDGE: INJECT AURA FROM DASHBOARD
+                IconButton(onClick = {
+                    if (auraPart.isNotBlank()) {
+                        activePrompt += "\n\n[INJECTED AURA]: $auraPart"
+                        Toast.makeText(context, "Aura Fused!", Toast.LENGTH_SHORT).show()
+                    } else {
+                        Toast.makeText(context, "Run a scan in Studio first!", Toast.LENGTH_SHORT).show()
+                    }
+                }) {
+                    Icon(Icons.Default.AddCircle, contentDescription = "Inject Aura", tint = Color.Magenta)
                 }
-            }) {
-                Icon(Icons.Default.CheckCircle, contentDescription = "Save", tint = Color.Green)
+
+                // 💾 THE VAULT: SAVE PROMPT TO DATABASE
+                IconButton(onClick = {
+                    scope.launch {
+                        val videoUri = mediaManager.player.currentMediaItem?.localConfiguration?.uri?.toString() ?: ""
+                        val thumbPath = if(videoUri.isNotBlank()) mediaManager.snatchThumbnail(Uri.parse(videoUri)) else null
+
+                        val promptBlueprint = BlueprintEntity(
+                            videoUri = videoUri,
+                            thumbnailUri = thumbPath,
+                            personaName = "Prompt Lab",
+                            platform = "Cinematic AI",
+                            titleUsed = "Prompt Extraction",
+                            hookTimestamp = "N/A",
+                            auraProfile = auraPart,
+                            fullDescription = activePrompt
+                        )
+                        dao.insertBlueprint(promptBlueprint)
+                        Toast.makeText(context, "Prompt Vaulted!", Toast.LENGTH_SHORT).show()
+                    }
+                }) {
+                    Icon(Icons.Default.Star, contentDescription = "Vault", tint = Color.Yellow)
+                }
             }
         }
 
@@ -62,7 +98,7 @@ fun PromptLabScreen(geminiManager: GeminiManager, mediaManager: MediaManager, da
         Card(
             modifier = Modifier.fillMaxWidth().weight(0.4f),
             colors = CardDefaults.cardColors(containerColor = Color.Black),
-            border = BorderStroke(1.dp, if (isAtLimit) Color.Red else Color.Cyan.copy(alpha = 0.3f))
+            border = BorderStroke(1.dp, Color.Cyan.copy(alpha = 0.3f))
         ) {
             Box(modifier = Modifier.fillMaxSize().padding(12.dp)) {
                 OutlinedTextField(
@@ -88,7 +124,7 @@ fun PromptLabScreen(geminiManager: GeminiManager, mediaManager: MediaManager, da
                     if (videoUri != null) {
                         activePrompt = geminiManager.extractPrompt(videoUri)
                     } else {
-                        Toast.makeText(context, "Load video in Studio first!", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, "Load a video in Studio first!", Toast.LENGTH_SHORT).show()
                     }
                 }
             },
@@ -96,7 +132,7 @@ fun PromptLabScreen(geminiManager: GeminiManager, mediaManager: MediaManager, da
             enabled = !isProcessing
         ) {
             if (isProcessing) CircularProgressIndicator(modifier = Modifier.size(24.dp), color = Color.White)
-            else Text("EXTRACT CINEMATIC DNA")
+            else Text("EXTRACT CINEMATIC DNA", fontWeight = FontWeight.Bold)
         }
 
         Spacer(Modifier.height(16.dp))
@@ -104,18 +140,21 @@ fun PromptLabScreen(geminiManager: GeminiManager, mediaManager: MediaManager, da
         Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(Icons.AutoMirrored.Filled.List, null, modifier = Modifier.size(16.dp), tint = Color.Gray)
             Spacer(Modifier.width(8.dp))
-            Text("SAVED PROMPTS", style = MaterialTheme.typography.labelLarge, color = Color.Gray)
+            Text("VAULTED HISTORY", style = MaterialTheme.typography.labelLarge, color = Color.Gray)
         }
 
         HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp), color = Color.Gray.copy(alpha = 0.2f))
 
         LazyColumn(modifier = Modifier.weight(0.4f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            items(promptHistory) { historyItem ->
+            items(savedBlueprints) { blueprint: BlueprintEntity ->
                 ListItem(
-                    modifier = Modifier.border(1.dp, Color.Gray.copy(alpha = 0.1f), RoundedCornerShape(8.dp)).clickable { activePrompt = historyItem },
-                    headlineContent = { Text(text = historyItem, maxLines = 2, overflow = TextOverflow.Ellipsis, fontSize = 12.sp) },
+                    modifier = Modifier
+                        .border(1.dp, Color.Gray.copy(alpha = 0.1f), RoundedCornerShape(8.dp))
+                        .clickable { activePrompt = blueprint.fullDescription },
+                    headlineContent = { Text(text = blueprint.fullDescription, maxLines = 2, overflow = TextOverflow.Ellipsis, fontSize = 12.sp) },
+                    supportingContent = { Text("${blueprint.platform} - ${blueprint.personaName}", fontSize = 10.sp, color = Color.Gray) },
                     trailingContent = {
-                        IconButton(onClick = { promptHistory.remove(historyItem) }) {
+                        IconButton(onClick = { scope.launch { dao.deleteBlueprint(blueprint.id) } }) {
                             Icon(Icons.Default.Delete, null, tint = Color.Red.copy(alpha = 0.4f))
                         }
                     }

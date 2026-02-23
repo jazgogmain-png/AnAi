@@ -8,12 +8,13 @@ data class BlueprintEntity(
     @PrimaryKey(autoGenerate = true) val id: Int = 0,
     val timestamp: Long = System.currentTimeMillis(),
     val videoUri: String,
-    val thumbnailUri: String? = null, // <--- NEW: Path to the snatched frame
+    val thumbnailUri: String? = null, // <--- THE VISUAL ANCHOR
     val personaName: String,
     val platform: String,
     val titleUsed: String,
     val hookTimestamp: String,
     val auraProfile: String,
-    val fullDescription: String,
-    val isStarred: Boolean = false
+    val fullDescription: String, // Also stores the Cinematic Prompt in Lab entries
+    val isStarred: Boolean = false,
+    val alias: String? = null
 )

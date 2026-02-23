@@ -127,11 +127,10 @@ fun DashboardScreen(
             }
         }
 
-        // --- BOX 1: THE VERBAL (V1/V2/V3 + FORMATTED HT) ---
         item {
             Column(modifier = Modifier.fillMaxWidth().border(1.dp, MaterialTheme.colorScheme.outline, MaterialTheme.shapes.medium).padding(12.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(if (isTikTok) "TikTok Verbal Block" else "YouTube SEO Block", style = MaterialTheme.typography.labelLarge)
+                    Text(if (isTikTok) "TikTok Verbal" else "YouTube SEO Block", style = MaterialTheme.typography.labelLarge)
                     Spacer(Modifier.weight(1f))
                     listOf("V1", "V2", "V3").forEachIndexed { index, label ->
                         InputChip(
@@ -144,8 +143,6 @@ fun DashboardScreen(
                 }
 
                 val currentCap = if (captionOptions.size > activeCaptionIndex) captionOptions[activeCaptionIndex] else ""
-
-                // HT BEAST: Splits comma-separated list and ensures each has a #
                 val formattedHashtags = hashtagPart.split(",").filter { it.isNotBlank() }.joinToString(" ") {
                     val trimmed = it.trim()
                     if (trimmed.startsWith("#")) trimmed else "#$trimmed"
@@ -154,9 +151,9 @@ fun DashboardScreen(
                 val fullVerbalBlock = when {
                     isTikTok -> if (formattedHashtags.isNotBlank()) "$currentCap\n\n$formattedHashtags" else currentCap
                     isYouTube -> buildString {
-                        append(currentCap) // Title
+                        append(currentCap)
                         append("\n\n")
-                        append(descPart)   // Hook + Context + Bio Anchor
+                        append(descPart)
                         if (formattedHashtags.isNotBlank()) append("\n\n$formattedHashtags")
                     }
                     else -> currentCap
@@ -177,7 +174,6 @@ fun DashboardScreen(
             }
         }
 
-        // --- BOX 2: STRATEGY ---
         item {
             AnimatedVisibility(visible = auraPart.isNotBlank() || hookPart.isNotBlank()) {
                 Column(modifier = Modifier.fillMaxWidth().border(1.dp, Color.Cyan.copy(alpha = 0.5f), MaterialTheme.shapes.medium).padding(12.dp)) {
@@ -192,7 +188,6 @@ fun DashboardScreen(
             }
         }
 
-        // --- BOX 3: PRODUCTION / CHIPS ---
         item {
             AnimatedVisibility(visible = descPart.isNotBlank() || seoTags.isNotBlank()) {
                 if (isTikTok) {
@@ -202,7 +197,7 @@ fun DashboardScreen(
                         if (seoTags.isNotBlank()) append(seoTags)
                     }
                     Column(modifier = Modifier.fillMaxWidth().border(1.dp, Color.Magenta.copy(alpha = 0.5f), MaterialTheme.shapes.medium).padding(12.dp)) {
-                        Text("Production Notes (Selectable)", style = MaterialTheme.typography.labelLarge, color = Color.Magenta)
+                        Text("Production Notes", style = MaterialTheme.typography.labelLarge, color = Color.Magenta)
                         Spacer(Modifier.height(8.dp))
                         OutlinedTextField(
                             value = productionNotes, onValueChange = {}, readOnly = true,
@@ -251,8 +246,15 @@ fun DashboardScreen(
                     onClick = {
                         scope.launch {
                             val currentCap = if (captionOptions.size > activeCaptionIndex) captionOptions[activeCaptionIndex] else ""
+
+                            // 📸 SNAPSHOT: Snatch thumbnail before vaulting
+                            val thumbPath = videoUriString?.let { uriStr ->
+                                mediaManager.snatchThumbnail(Uri.parse(uriStr))
+                            }
+
                             val blueprint = BlueprintEntity(
                                 videoUri = videoUriString ?: "",
+                                thumbnailUri = thumbPath,
                                 personaName = selectedPersona?.name ?: "Unknown",
                                 platform = selectedEngine?.name ?: "Master",
                                 titleUsed = currentCap,

@@ -11,9 +11,9 @@ import androidx.room.RoomDatabase
         PersonaEntity::class,
         EngineEntity::class,
         PlatformEntity::class,
-        BlueprintEntity::class // <--- PROTOCOL: SUCCESS VAULT ADDED
+        BlueprintEntity::class
     ],
-    version = 3, // <--- BUMPING TO V3 TO TRIGGER THE NEW SCHEMA
+    version = 5, // 🛠️ Bump to 5 to force a clean break from the mess
     exportSchema = false
 )
 abstract class ArchitectDatabase : RoomDatabase() {
@@ -30,6 +30,8 @@ abstract class ArchitectDatabase : RoomDatabase() {
                     ArchitectDatabase::class.java,
                     "architect_database"
                 )
+                    // 🧨 NUCLEAR OPTION: This wipes the old database and starts fresh.
+                    // Since you backed up to your desktop, we are safe to do this!
                     .fallbackToDestructiveMigration()
                     .build()
                 INSTANCE = instance
