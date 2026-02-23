@@ -60,6 +60,7 @@ fun DashboardScreen(
     var activeCaptionIndex by rememberSaveable { mutableIntStateOf(0) }
 
     val isTikTok = selectedEngine?.name?.contains("TikTok", ignoreCase = true) ?: false
+    val isYouTube = selectedEngine?.name?.contains("YouTube", ignoreCase = true) ?: (!isTikTok && selectedEngine != null)
 
     LaunchedEffect(selectedPlatform, engines, personas) {
         if (selectedPlatform != null) {
@@ -79,9 +80,7 @@ fun DashboardScreen(
 
     val videoPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         uri?.let {
-            try {
-                context.contentResolver.takePersistableUriPermission(it, Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            } catch (e: Exception) {}
+            try { context.contentResolver.takePersistableUriPermission(it, Intent.FLAG_GRANT_READ_URI_PERMISSION) } catch (e: Exception) {}
             videoUriString = it.toString()
             mediaManager.loadVideo(it)
             geminiManager.clearLog()
@@ -128,11 +127,11 @@ fun DashboardScreen(
             }
         }
 
-        // --- BOX 1: THE VERBAL (V1/V2/V3 + HT) ---
+        // --- BOX 1: THE VERBAL (V1/V2/V3 + FORMATTED HT) ---
         item {
             Column(modifier = Modifier.fillMaxWidth().border(1.dp, MaterialTheme.colorScheme.outline, MaterialTheme.shapes.medium).padding(12.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(if (isTikTok) "TikTok Verbal Block" else "Draft Station", style = MaterialTheme.typography.labelLarge)
+                    Text(if (isTikTok) "TikTok Verbal Block" else "YouTube SEO Block", style = MaterialTheme.typography.labelLarge)
                     Spacer(Modifier.weight(1f))
                     listOf("V1", "V2", "V3").forEachIndexed { index, label ->
                         InputChip(
@@ -145,7 +144,23 @@ fun DashboardScreen(
                 }
 
                 val currentCap = if (captionOptions.size > activeCaptionIndex) captionOptions[activeCaptionIndex] else ""
-                val fullVerbalBlock = if (isTikTok && hashtagPart.isNotBlank()) "$currentCap\n\n$hashtagPart" else currentCap
+
+                // HT BEAST: Splits comma-separated list and ensures each has a #
+                val formattedHashtags = hashtagPart.split(",").filter { it.isNotBlank() }.joinToString(" ") {
+                    val trimmed = it.trim()
+                    if (trimmed.startsWith("#")) trimmed else "#$trimmed"
+                }
+
+                val fullVerbalBlock = when {
+                    isTikTok -> if (formattedHashtags.isNotBlank()) "$currentCap\n\n$formattedHashtags" else currentCap
+                    isYouTube -> buildString {
+                        append(currentCap) // Title
+                        append("\n\n")
+                        append(descPart)   // Hook + Context + Bio Anchor
+                        if (formattedHashtags.isNotBlank()) append("\n\n$formattedHashtags")
+                    }
+                    else -> currentCap
+                }
 
                 OutlinedTextField(
                     value = fullVerbalBlock, onValueChange = {}, readOnly = true,
@@ -153,7 +168,7 @@ fun DashboardScreen(
                         detectTapGestures(onDoubleTap = {
                             if (fullVerbalBlock.isNotBlank()) {
                                 clipboardManager.setText(AnnotatedString(fullVerbalBlock))
-                                Toast.makeText(context, "Verbal Block Copied!", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(context, "Copied!", Toast.LENGTH_SHORT).show()
                             }
                         })
                     },
@@ -162,22 +177,22 @@ fun DashboardScreen(
             }
         }
 
-        // --- BOX 2: VISUAL STRATEGY (AURA & HOOK) ---
+        // --- BOX 2: STRATEGY ---
         item {
             AnimatedVisibility(visible = auraPart.isNotBlank() || hookPart.isNotBlank()) {
                 Column(modifier = Modifier.fillMaxWidth().border(1.dp, Color.Cyan.copy(alpha = 0.5f), MaterialTheme.shapes.medium).padding(12.dp)) {
                     Text("Visual Strategy", style = MaterialTheme.typography.labelLarge, color = Color.Cyan)
                     if (hookPart.isNotBlank()) {
-                        Text("🎯 GOLDEN HOOK: $hookPart", fontSize = 12.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 8.dp))
+                        Text("🎯 HOOK: $hookPart", fontSize = 12.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 8.dp))
                     }
                     if (auraPart.isNotBlank()) {
-                        Text("✨ AURA PROFILE: $auraPart", fontSize = 12.sp, color = Color.LightGray, modifier = Modifier.padding(top = 4.dp))
+                        Text("✨ AURA: $auraPart", fontSize = 12.sp, color = Color.LightGray, modifier = Modifier.padding(top = 4.dp))
                     }
                 }
             }
         }
 
-        // --- BOX 3: PRODUCTION (SELECTABLE TEXT) ---
+        // --- BOX 3: PRODUCTION / CHIPS ---
         item {
             AnimatedVisibility(visible = descPart.isNotBlank() || seoTags.isNotBlank()) {
                 if (isTikTok) {
@@ -186,36 +201,29 @@ fun DashboardScreen(
                         if (descPart.isNotBlank() && seoTags.isNotBlank()) append("\n\n")
                         if (seoTags.isNotBlank()) append(seoTags)
                     }
-
                     Column(modifier = Modifier.fillMaxWidth().border(1.dp, Color.Magenta.copy(alpha = 0.5f), MaterialTheme.shapes.medium).padding(12.dp)) {
-                        Text("Production (Overlay & Music)", style = MaterialTheme.typography.labelLarge, color = Color.Magenta)
+                        Text("Production Notes (Selectable)", style = MaterialTheme.typography.labelLarge, color = Color.Magenta)
                         Spacer(Modifier.height(8.dp))
-                        // Changed to OutlinedTextField for specific text selection/highlighting
                         OutlinedTextField(
-                            value = productionNotes,
-                            onValueChange = {},
-                            readOnly = true,
+                            value = productionNotes, onValueChange = {}, readOnly = true,
                             modifier = Modifier.fillMaxWidth().heightIn(min = 60.dp),
                             textStyle = MaterialTheme.typography.bodySmall,
-                            colors = OutlinedTextFieldDefaults.colors(
-                                focusedBorderColor = Color.Transparent,
-                                unfocusedBorderColor = Color.Transparent
-                            )
+                            colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = Color.Transparent, unfocusedBorderColor = Color.Transparent)
                         )
                     }
                 } else {
-                    // YOUTUBE TAG CHIPS
                     Column(modifier = Modifier.fillMaxWidth().border(1.dp, Color.Yellow.copy(alpha = 0.5f), MaterialTheme.shapes.medium).padding(12.dp)) {
-                        Text("SEO Metadata Tags", style = MaterialTheme.typography.labelLarge, color = Color.Yellow)
+                        Text("Individual SEO Tags", style = MaterialTheme.typography.labelLarge, color = Color.Yellow)
                         Spacer(Modifier.height(8.dp))
                         FlowRow(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             seoTags.split(",").filter { it.isNotBlank() }.forEach { tag ->
+                                val cleanTag = tag.trim()
                                 SuggestionChip(
                                     onClick = {
-                                        clipboardManager.setText(AnnotatedString(tag.trim()))
-                                        Toast.makeText(context, "Tag Copied!", Toast.LENGTH_SHORT).show()
+                                        clipboardManager.setText(AnnotatedString(cleanTag))
+                                        Toast.makeText(context, "Copied Tag!", Toast.LENGTH_SHORT).show()
                                     },
-                                    label = { Text(tag.trim(), fontSize = 10.sp) }
+                                    label = { Text(cleanTag, fontSize = 10.sp) }
                                 )
                             }
                         }
