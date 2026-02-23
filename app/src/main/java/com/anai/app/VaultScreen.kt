@@ -25,7 +25,7 @@ import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow // <-- FIXED: Added this import
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
@@ -39,7 +39,8 @@ import java.util.*
 @Composable
 fun VaultScreen(dao: ArchitectDao) {
     val scope = rememberCoroutineScope()
-    val blueprints by dao.getAllHistory().collectAsState(initial = emptyList())
+    // 🎥 PARTITION: Only collect Video Scans (SCAN type)
+    val blueprints by dao.getAllScans().collectAsState(initial = emptyList())
     val context = LocalContext.current
     val clipboardManager = LocalClipboardManager.current
 
@@ -48,9 +49,38 @@ fun VaultScreen(dao: ArchitectDao) {
     var blueprintToRename by remember { mutableStateOf<BlueprintEntity?>(null) }
     var newNameText by remember { mutableStateOf("") }
 
+    // 🛡️ SAFETY GATE STATE
+    var showDeleteDialog by remember { mutableStateOf(false) }
+    var blueprintToDelete by remember { mutableStateOf<BlueprintEntity?>(null) }
+
+    // 🧨 DELETE CONFIRMATION DIALOG
+    if (showDeleteDialog && blueprintToDelete != null) {
+        AlertDialog(
+            onDismissRequest = { showDeleteDialog = false },
+            title = { Text("Purge Archive?") },
+            text = { Text("Are you sure you want to delete this viral blueprint? This will also remove it from your Prompt Lab Aura Chips.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    scope.launch {
+                        blueprintToDelete?.let { dao.deleteBlueprint(it.id) }
+                        showDeleteDialog = false
+                        blueprintToDelete = null
+                    }
+                }) {
+                    Text("DELETE", color = Color.Red)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteDialog = false }) {
+                    Text("CANCEL")
+                }
+            }
+        )
+    }
+
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
         Text("SUCCESS VAULT", style = MaterialTheme.typography.headlineSmall, color = Color.Cyan)
-        Text("Archived winning DNA and viral blueprints.", fontSize = 11.sp, color = Color.Gray)
+        Text("Archived winning DNA and viral video blueprints.", fontSize = 11.sp, color = Color.Gray)
 
         Spacer(Modifier.height(16.dp))
 
@@ -58,11 +88,14 @@ fun VaultScreen(dao: ArchitectDao) {
             items(blueprints) { blueprint ->
                 BlueprintCard(
                     blueprint = blueprint,
-                    onDelete = { scope.launch { dao.deleteBlueprint(blueprint.id) } },
+                    onDelete = {
+                        blueprintToDelete = blueprint
+                        showDeleteDialog = true
+                    },
                     onStar = { scope.launch { dao.toggleStar(blueprint.id, !blueprint.isStarred) } },
                     onRename = {
                         blueprintToRename = blueprint
-                        newNameText = blueprint.personaName
+                        newNameText = blueprint.alias ?: blueprint.personaName
                         showRenameDialog = true
                     },
                     onCopy = {
@@ -84,7 +117,7 @@ fun VaultScreen(dao: ArchitectDao) {
                 OutlinedTextField(
                     value = newNameText,
                     onValueChange = { newNameText = it },
-                    label = { Text("Friendly Name") },
+                    label = { Text("Efficiency Alias (e.g. 'Neon Granny')") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -138,7 +171,7 @@ fun BlueprintCard(
                 Column(modifier = Modifier.weight(1f)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
-                            text = blueprint.personaName,
+                            text = blueprint.alias ?: blueprint.personaName,
                             fontWeight = FontWeight.Bold,
                             fontSize = 14.sp,
                             color = if (blueprint.isStarred) Color.Yellow else Color.White
@@ -164,7 +197,7 @@ fun BlueprintCard(
             // --- DATA PREVIEW ---
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Column {
-                    Text("📽️ CAPTION USED", fontSize = 9.sp, fontWeight = FontWeight.Bold, color = Color.Gray)
+                    Text("📽️ VIRAL ANCHOR", fontSize = 9.sp, fontWeight = FontWeight.Bold, color = Color.Gray)
                     Text(blueprint.titleUsed, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
                 Column {
@@ -173,7 +206,9 @@ fun BlueprintCard(
                         text = blueprint.auraProfile,
                         fontSize = 12.sp,
                         lineHeight = 16.sp,
-                        color = MaterialTheme.colorScheme.onSurface
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
             }
@@ -196,7 +231,7 @@ fun BlueprintCard(
                 ) {
                     Icon(Icons.Default.Share, null, modifier = Modifier.size(14.dp))
                     Spacer(Modifier.width(6.dp))
-                    Text("Copy Full Bio", fontSize = 11.sp)
+                    Text("Copy DNA", fontSize = 11.sp)
                 }
             }
         }

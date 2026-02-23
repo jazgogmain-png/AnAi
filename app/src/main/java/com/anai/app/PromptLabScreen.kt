@@ -3,11 +3,14 @@ package com.anai.app
 import android.net.Uri
 import android.widget.Toast
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.List
@@ -16,16 +19,19 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil.compose.rememberAsyncImagePainter
 import com.anai.app.database.ArchitectDao
 import com.anai.app.database.BlueprintEntity
 import kotlinx.coroutines.launch
@@ -39,17 +45,48 @@ import androidx.compose.runtime.setValue
 @Composable
 fun PromptLabScreen(geminiManager: GeminiManager, mediaManager: MediaManager, dao: ArchitectDao) {
     val scope = rememberCoroutineScope()
-    val clipboardManager = LocalClipboardManager.current
     val context = LocalContext.current
 
     val isProcessing by geminiManager.isProcessing.collectAsState()
     val auraPart by geminiManager.auraPart.collectAsState()
 
-    // 🏛️ VAULT COLLECTION: Synced with your dao.getAllHistory()
-    val savedBlueprints by dao.getAllHistory().collectAsState(initial = emptyList())
+    // 🏆 WINNERS CIRCLE: Collect starred auras (entryType = SCAN)
+    val winnersCircle by dao.getWinnersCircle().collectAsState(initial = emptyList())
+
+    // 🏛️ VAULT COLLECTION: Only show Lab History (entryType = LAB)
+    val savedBlueprints by dao.getLabHistory().collectAsState(initial = emptyList())
 
     var activePrompt by remember { mutableStateOf("Ready to extract cinematic DNA...") }
     val charLimit = 600
+
+    // 🛡️ SAFETY GATE STATE
+    var showDeleteDialog by remember { mutableStateOf(false) }
+    var blueprintToDelete by remember { mutableStateOf<Int?>(null) }
+
+    // 🧨 DELETE CONFIRMATION DIALOG
+    if (showDeleteDialog && blueprintToDelete != null) {
+        AlertDialog(
+            onDismissRequest = { showDeleteDialog = false },
+            title = { Text("Purge DNA?") },
+            text = { Text("Are you sure you want to delete this specific prompt? This will not affect your video scans.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    scope.launch {
+                        blueprintToDelete?.let { dao.deleteBlueprint(it) }
+                        showDeleteDialog = false
+                        blueprintToDelete = null
+                    }
+                }) {
+                    Text("DELETE", color = Color.Red)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteDialog = false }) {
+                    Text("CANCEL")
+                }
+            }
+        )
+    }
 
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
@@ -68,7 +105,7 @@ fun PromptLabScreen(geminiManager: GeminiManager, mediaManager: MediaManager, da
                     Icon(Icons.Default.AddCircle, contentDescription = "Inject Aura", tint = Color.Magenta)
                 }
 
-                // 💾 THE VAULT: SAVE PROMPT TO DATABASE
+                // 💾 THE VAULT: SAVE PROMPT (Explicitly tagged as LAB)
                 IconButton(onClick = {
                     scope.launch {
                         val videoUri = mediaManager.player.currentMediaItem?.localConfiguration?.uri?.toString() ?: ""
@@ -82,7 +119,8 @@ fun PromptLabScreen(geminiManager: GeminiManager, mediaManager: MediaManager, da
                             titleUsed = "Prompt Extraction",
                             hookTimestamp = "N/A",
                             auraProfile = auraPart,
-                            fullDescription = activePrompt
+                            fullDescription = activePrompt,
+                            entryType = "LAB" // <--- CRITICAL FIX
                         )
                         dao.insertBlueprint(promptBlueprint)
                         Toast.makeText(context, "Prompt Vaulted!", Toast.LENGTH_SHORT).show()
@@ -93,7 +131,48 @@ fun PromptLabScreen(geminiManager: GeminiManager, mediaManager: MediaManager, da
             }
         }
 
-        Spacer(Modifier.height(16.dp))
+        // 🌟 REUSABLE AURA CHIPS (WINNERS CIRCLE - SCAN ONLY)
+        if (winnersCircle.isNotEmpty()) {
+            Text("REUSABLE AURAS", style = MaterialTheme.typography.labelSmall, color = Color.Magenta.copy(alpha = 0.7f))
+            LazyRow(
+                modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                contentPadding = PaddingValues(horizontal = 4.dp)
+            ) {
+                items(winnersCircle) { winner ->
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier
+                            .width(64.dp)
+                            .clickable {
+                                activePrompt += "\n\n[FUSED AURA]: ${winner.auraProfile}"
+                                Toast.makeText(context, "Aura Injected!", Toast.LENGTH_SHORT).show()
+                            }
+                    ) {
+                        Image(
+                            painter = rememberAsyncImagePainter(winner.thumbnailUri),
+                            contentDescription = winner.alias ?: winner.personaName,
+                            modifier = Modifier
+                                .size(50.dp)
+                                .clip(CircleShape)
+                                .border(2.dp, Color.Magenta.copy(alpha = 0.5f), CircleShape),
+                            contentScale = ContentScale.Crop
+                        )
+                        Text(
+                            text = winner.alias ?: winner.personaName,
+                            fontSize = 9.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            color = Color.White,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.padding(top = 4.dp)
+                        )
+                    }
+                }
+            }
+        }
+
+        Spacer(Modifier.height(8.dp))
 
         Card(
             modifier = Modifier.fillMaxWidth().weight(0.4f),
@@ -140,7 +219,7 @@ fun PromptLabScreen(geminiManager: GeminiManager, mediaManager: MediaManager, da
         Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(Icons.AutoMirrored.Filled.List, null, modifier = Modifier.size(16.dp), tint = Color.Gray)
             Spacer(Modifier.width(8.dp))
-            Text("VAULTED HISTORY", style = MaterialTheme.typography.labelLarge, color = Color.Gray)
+            Text("LAB VAULTED HISTORY", style = MaterialTheme.typography.labelLarge, color = Color.Gray)
         }
 
         HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp), color = Color.Gray.copy(alpha = 0.2f))
@@ -151,10 +230,13 @@ fun PromptLabScreen(geminiManager: GeminiManager, mediaManager: MediaManager, da
                     modifier = Modifier
                         .border(1.dp, Color.Gray.copy(alpha = 0.1f), RoundedCornerShape(8.dp))
                         .clickable { activePrompt = blueprint.fullDescription },
-                    headlineContent = { Text(text = blueprint.fullDescription, maxLines = 2, overflow = TextOverflow.Ellipsis, fontSize = 12.sp) },
-                    supportingContent = { Text("${blueprint.platform} - ${blueprint.personaName}", fontSize = 10.sp, color = Color.Gray) },
+                    headlineContent = { Text(text = blueprint.fullDescription, maxLines = 2, overflow = TextOverflow.Ellipsis, fontSize = 12.sp, color = Color.White) },
+                    supportingContent = { Text("Prompt Lab Iteration", fontSize = 10.sp, color = Color.Gray) },
                     trailingContent = {
-                        IconButton(onClick = { scope.launch { dao.deleteBlueprint(blueprint.id) } }) {
+                        IconButton(onClick = {
+                            blueprintToDelete = blueprint.id
+                            showDeleteDialog = true
+                        }) {
                             Icon(Icons.Default.Delete, null, tint = Color.Red.copy(alpha = 0.4f))
                         }
                     }

@@ -13,7 +13,7 @@ import androidx.room.RoomDatabase
         PlatformEntity::class,
         BlueprintEntity::class
     ],
-    version = 5, // 🛠️ Bump to 5 to force a clean break from the mess
+    version = 6, // 🚀 Bumped to 6 for the new Partitioned Architecture
     exportSchema = false
 )
 abstract class ArchitectDatabase : RoomDatabase() {
@@ -30,8 +30,8 @@ abstract class ArchitectDatabase : RoomDatabase() {
                     ArchitectDatabase::class.java,
                     "architect_database"
                 )
-                    // 🧨 NUCLEAR OPTION: This wipes the old database and starts fresh.
-                    // Since you backed up to your desktop, we are safe to do this!
+                    // 🧨 NUCLEAR OPTION: Wipes the local DB to align with the new schema.
+                    // Use your Lifeboat string to restore data after launch!
                     .fallbackToDestructiveMigration()
                     .build()
                 INSTANCE = instance
