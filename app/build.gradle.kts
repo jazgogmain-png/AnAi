@@ -66,6 +66,8 @@ dependencies {
     implementation("androidx.compose.ui:ui-graphics")
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("androidx.compose.material3:material3")
+    implementation("androidx.compose.material:material-icons-extended-android:1.6.1")
+
 
     // --- COROUTINES & LIFECYCLE ---
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.7.0")
@@ -79,7 +81,7 @@ dependencies {
     implementation("androidx.media3:media3-common:$media3Version")
     implementation("androidx.media3:media3-effect:$media3Version")
 
-    // --- ROOM (The Memory - Version 2.7.0-alpha11 fixes the JVM V signature error) ---
+    // --- ROOM (The Memory) ---
     val roomVersion = "2.7.0-alpha11"
     implementation("androidx.room:room-runtime:$roomVersion")
     implementation("androidx.room:room-ktx:$roomVersion")
@@ -89,7 +91,9 @@ dependencies {
     implementation("com.google.ai.client.generativeai:generativeai:0.9.0")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3")
 
-    testImplementation("junit:junit:4.13.2")
+    // --- GSON (The Lifeboat Engine) ---
+    implementation("com.google.code.gson:gson:2.10.1")
 
+    testImplementation("junit:junit:4.13.2")
     implementation("io.coil-kt:coil-compose:2.5.0")
 }

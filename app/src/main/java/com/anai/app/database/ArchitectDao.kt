@@ -9,6 +9,10 @@ interface ArchitectDao {
     @Query("SELECT * FROM keys")
     fun getAllKeys(): Flow<List<KeyEntity>>
 
+    // 🛡️ LIFEBOAT: Direct access for API Key backup
+    @Query("SELECT * FROM keys")
+    suspend fun getAllKeysDirect(): List<KeyEntity>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertKey(key: KeyEntity)
 
@@ -19,6 +23,10 @@ interface ArchitectDao {
     @Query("SELECT * FROM personas")
     fun getAllPersonas(): Flow<List<PersonaEntity>>
 
+    // 🛡️ LIFEBOAT: Direct access for Souls backup
+    @Query("SELECT * FROM personas")
+    suspend fun getAllPersonasDirect(): List<PersonaEntity>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertPersona(persona: PersonaEntity)
 
@@ -28,6 +36,10 @@ interface ArchitectDao {
     // --- ENGINES (SCRIPTS) ---
     @Query("SELECT * FROM engines")
     fun getAllEngines(): Flow<List<EngineEntity>>
+
+    // 🛡️ LIFEBOAT: Direct access for Engines backup
+    @Query("SELECT * FROM engines")
+    suspend fun getAllEnginesDirect(): List<EngineEntity>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertEngine(engine: EngineEntity)
@@ -52,6 +64,10 @@ interface ArchitectDao {
     @Query("SELECT * FROM blueprint_history ORDER BY timestamp DESC")
     fun getAllHistory(): Flow<List<BlueprintEntity>>
 
+    // 🛡️ LIFEBOAT: Direct access for Success Vault backup
+    @Query("SELECT * FROM blueprint_history")
+    suspend fun getAllHistoryDirect(): List<BlueprintEntity>
+
     @Query("SELECT * FROM blueprint_history WHERE isStarred = 1 ORDER BY timestamp DESC")
     fun getWinnersCircle(): Flow<List<BlueprintEntity>>
 
@@ -61,7 +77,6 @@ interface ArchitectDao {
     @Query("UPDATE blueprint_history SET isStarred = :starred WHERE id = :id")
     suspend fun toggleStar(id: Int, starred: Boolean)
 
-    // NEW: Rename the "Aura" or "Friendly Alias" for organization
     @Query("UPDATE blueprint_history SET personaName = :newName WHERE id = :id")
     suspend fun updateBlueprintAlias(id: Int, newName: String)
 
